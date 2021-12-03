@@ -69,6 +69,7 @@ class Agent:
         self.zpos = z
         self.xvel = 0
         self.yvel = 0
+        self.prev_action = 0
         self.orient = 0 # 0-7 in 45 degree increments
         self.energy = energy
         self.food_inventory = 0
@@ -130,7 +131,7 @@ class Pheromone:
 class game_space:
     def __init__(self,
                  hidden_size=[16],
-                 num_prev_states=4,
+                 num_prev_states=2,
                  mutation_rate=0.001,
                  area_size=50,
                  scaling=1,
@@ -202,6 +203,7 @@ class game_space:
                              "visible_agents",
                              "adjacent_agents",
                              "mate_in_range",
+                             "previous_action",
                              "own_age",
                              "own_energy",
                              "own_temperature",
@@ -283,12 +285,14 @@ class game_space:
             for item in self.genome_store:
                 a, g = item
                 self.genome_pool.append(g)
-        else:
-            print("Creating genomes.")
-            self.genome_pool = self.make_random_genomes()
+        if len(self.genome_pool) < 100:
+            m = 100 - len(self.genome_pool)
+            print("Creating " + str(m) + " random genomes.")
+            g = self.make_random_genomes()
+            self.genome_pool.extend(g)
 
     def save_genomes(self):
-        if len(self.genome_store) < 100:
+        if len(self.genome_store) < 1:
             return
         with open(self.savedir + "/genome_store.pkl", "wb") as f:
             f.write(pickle.dumps(self.genome_store))
@@ -561,8 +565,10 @@ class game_space:
             temperature = self.agents[index].temperature
             if temperature > 30:
                 energy_drain += (temperature - 30) * 0.4
+                self.agents[index].happiness -= 1
             if temperature < 10:
                 energy_drain += (10 - temperature) * 0.4
+                self.agents[index].happiness -= 1
             self.agents[index].energy -= energy_drain
             if self.agents[index].energy <= 0:
                 dead.add(index)
@@ -617,6 +623,7 @@ class game_space:
 # Agent actions
 ###############
     def apply_agent_action(self, index, action):
+        self.agents[index].prev_action = action
         agent_functions = []
         for x, c in self.actions.items():
             agent_functions.append("action_" + x)
@@ -765,6 +772,9 @@ class game_space:
             observations.append(val)
         return observations
 
+    def get_previous_action(self, index):
+        return self.agents[index].prev_action
+
     def get_own_age(self, index):
         return self.agents[index].age
 
@@ -832,7 +842,7 @@ class game_space:
 # Pheromone runtime routines
 ############################
     def update_pheromone_alpha(self, index):
-        alpha = self.pheromones[index].strength.2
+        alpha = self.pheromones[index].strength/2
         self.pheromones[index].entity.color=color.rgba(102,51,0,alpha)
 
     def update_pheromone_status(self):
@@ -858,7 +868,7 @@ class game_space:
         yabs = self.pheromones[index].ypos
         zabs = self.pheromones[index].zpos
         s = self.scaling*2
-        alpha = self.pheromones[index].strength.2
+        alpha = self.pheromones[index].strength/2
         self.pheromones[index].entity = Entity(model='sphere',
                                          color=color.rgba(102,51,0,alpha),
                                          scale=(s,s,s),
@@ -1121,6 +1131,10 @@ class game_space:
         msg += "Starting agents: " + str(self.num_agents)
         msg += " area size: " + str(self.area_size)
         msg += " Step: " + str(self.steps) + "\n"
+        msg += "Action size: " + str(self.action_size)
+        msg += " state_size: " + str(self.state_size)
+        msg += " hidden: " + str(self.hidden_size)
+        msg += " genome size: " + str(self.genome_size) + "\n"
         msg += "\n"
         msg += "Agents: " + str(num_agents) + " energy: " + str(agent_energy)
         msg += " mean age: " + "%.2f"%mean_age
