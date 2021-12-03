@@ -261,10 +261,10 @@ class game_space:
 
 
 # To do:
-# - flexible hidden layer scheme
 # - add predators, both moving and stationary
 # - queens?
 # - add climate change, both periodic and from balance of plants and organisms
+# - add hunger
 # - add disease
 # - add poisonous food
 # - add cold and hot areas
@@ -282,13 +282,18 @@ class game_space:
         if os.path.exists(savedir + "/genome_store.pkl"):
             print("Loading genomes.")
             self.load_genomes()
+            sg = []
             for item in self.genome_store:
                 a, g = item
-                self.genome_pool.append(g)
-        if len(self.genome_pool) < 100:
-            m = 100 - len(self.genome_pool)
+                sg.append(g)
+            if len(sg) > self.num_agents:
+                self.genome_pool = random.sample(sg, self.num_agents)
+            else:
+                self.genome_pool = list(sg)
+        if len(self.genome_pool) < self.num_agents:
+            m = self.num_agents - len(self.genome_pool)
             print("Creating " + str(m) + " random genomes.")
-            g = self.make_random_genomes()
+            g = self.make_random_genomes(m)
             self.genome_pool.extend(g)
 
     def save_genomes(self):
@@ -697,7 +702,7 @@ class game_space:
             if self.agents[index].energy >= self.agent_start_energy:
                 self.agents[index].happiness -= 5
             else:
-                self.agents[index].energy += 10
+                self.agents[index].energy += 20
                 self.agents[index].happiness += 20
             self.agents[index].food_inventory -= 1
 
@@ -1030,9 +1035,9 @@ class game_space:
         genome = np.random.uniform(-1, 1, self.genome_size)
         return genome
 
-    def make_random_genomes(self):
+    def make_random_genomes(self, num):
         genome_pool = []
-        for _ in range(self.num_agents):
+        for _ in range(num):
             genome = self.make_random_genome()
             genome_pool.append(genome)
         return genome_pool
