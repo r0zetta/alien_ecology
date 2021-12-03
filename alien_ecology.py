@@ -11,23 +11,21 @@ from torch.distributions import Categorical
 from scipy.spatial import distance
 
 class Net(nn.Module):
-    def __init__(self, state_size, action_size, hidden_size,
-                 fc1_weights, fc2_weights, fc3_weights):
+    def __init__(self, weights):
         super(Net, self).__init__()
-        self.state_size = state_size
-        self.action_size = action_size
-        self.hidden_size = hidden_size
-        self.fc1 = nn.Linear(self.state_size, self.hidden_size, bias=False)
-        self.fc2 = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
-        self.fc3 = nn.Linear(self.hidden_size, self.action_size, bias=False)
-        self.fc1.weight.data =  fc1_weights
-        self.fc2.weight.data =  fc2_weights
-        self.fc3.weight.data =  fc3_weights
+        self.fc_layers = []
+        for item in weights:
+            s1, s2, d = item
+            fc = nn.Linear(s1, s2, bias=False)
+            fc.weight_data = d
+            self.fc_layers.append(fc)
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.softmax(F.relu(self.fc3(x)))
+        for i, fc in enumerate(self.fc_layers):
+            if i < len(self.fc_layers):
+                x = F.relu(fc(x))
+            else:
+                x = F.softmax(F.relu(fc(x)))
         return x
 
     def get_action(self, state):
@@ -38,10 +36,8 @@ class Net(nn.Module):
             return action
 
 class GN_model:
-    def __init__(self, state_size, action_size, hidden_size,
-                 fc1_weights, fc2_weights, fc3_weights):
-        self.policy = Net(state_size, action_size, hidden_size,
-                          fc1_weights, fc2_weights, fc3_weights)
+    def __init__(self, weights):
+        self.policy = Net(weights)
 
     def get_action(self, state):
         action = self.policy.get_action(state)
@@ -88,13 +84,22 @@ class Agent:
         #self.speed = random.uniform(0.3, 0.7)
         #self.color = random.choice(self.colors)
         self.genome = genome
-        m1 = state_size*hidden_size
-        m2 = m1 + hidden_size*hidden_size
-        fc1_weights = torch.Tensor(np.reshape(genome[:m1], (hidden_size, state_size)))
-        fc2_weights = torch.Tensor(np.reshape(genome[m1:m2], (hidden_size, hidden_size)))
-        fc3_weights = torch.Tensor(np.reshape(genome[m2:], (action_size, hidden_size)))
-        self.model = GN_model(state_size, action_size, hidden_size,
-                              fc1_weights, fc2_weights, fc3_weights)
+        weights = []
+        m1 = 0
+        m2 = self.state_size * self.hidden_size[0]
+        w = torch.Tensor(np.reshape(genome[m1:m2], (self.hidden_size[0], self.state_size)))
+        weights.append([self.state_size, self.hidden_size[0], w])
+        if len(self.hidden_size) > 1:
+            for i in range(len(self.hidden_size)):
+                if i+1 < len(self.hidden_size):
+                    m1 = m2
+                    m2 = m1 + (self.hidden_size[i] * self.hidden_size[i+1])
+                    w = torch.Tensor(np.reshape(genome[m1:m2],
+                                     (self.hidden_size[i], self.hidden_size[i+1])))
+                    weights.append([self.hidden_size[i], self.hidden_size[i+1], w])
+        w = torch.Tensor(np.reshape(genome[m2:], (action_size, hidden_size[-1])))
+        weights.append([self.hidden_size[-1], self.action_size, w])
+        self.model = GN_model(weights)
         self.state = None
         self.episode_steps = 0
         self.last_success = None
@@ -124,7 +129,7 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=200,
+                 hidden_size=[16],
                  num_prev_states=4,
                  mutation_rate=0.001,
                  area_size=50,
@@ -179,7 +184,6 @@ class game_space:
         self.agent_view_distance = agent_view_distance
         self.visible_area = math.pi*(self.agent_view_distance**2)
         self.mutation_rate = mutation_rate
-        self.hidden_size = 32
         self.actions = {"null": 0,
                         "rotate_right": 1,
                         "rotate_left": 2,
@@ -219,9 +223,16 @@ class game_space:
                              "step_oscillator_slow",
                              "step_oscillator_slow_offset",
                              "random_input"]
+        self.hidden_size = hidden_size
         self.action_size = len(self.actions)
         self.state_size = len(self.observations)*self.num_prev_states
-        self.genome_size = (self.state_size*self.hidden_size) + (self.hidden_size*self.hidden_size) + (self.action_size*self.hidden_size)
+        self.genome_size = 0
+        self.genome_size += self.state_size*self.hidden_size[0]
+        if len(self.hidden_size) > 1:
+            for i in range(len(self.hidden_size)):
+                if i+1 < len(self.hidden_size):
+                    self.genome_size += self.hidden_size[i]*self.hidden_size[i+1]
+        self.genome_size += self.action_size*self.hidden_size[-1]
         self.genome_store = []
         self.create_starting_food()
         self.create_genomes()
@@ -256,7 +267,7 @@ class game_space:
 # - add poisonous food
 # - add cold and hot areas
 # - add a mechanism to inherit size, speed, resilience to temperature, etc.
-# - add color and affinity for certain colors
+# - add type and affinity for certain types
 # - add sounds
 # - add excretion and effect on agents and plant life
 # - start github repo and report
@@ -821,7 +832,7 @@ class game_space:
 # Pheromone runtime routines
 ############################
     def update_pheromone_alpha(self, index):
-        alpha = self.pheromones[index].strength
+        alpha = self.pheromones[index].strength.2
         self.pheromones[index].entity.color=color.rgba(102,51,0,alpha)
 
     def update_pheromone_status(self):
@@ -847,7 +858,7 @@ class game_space:
         yabs = self.pheromones[index].ypos
         zabs = self.pheromones[index].zpos
         s = self.scaling*2
-        alpha = self.pheromones[index].strength
+        alpha = self.pheromones[index].strength.2
         self.pheromones[index].entity = Entity(model='sphere',
                                          color=color.rgba(102,51,0,alpha),
                                          scale=(s,s,s),
