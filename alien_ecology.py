@@ -56,6 +56,18 @@ class GN_model:
 # drop food
 # kick
 
+class Predator:
+    def __init__(self, x, y, z):
+        self.xpos = x
+        self.ypos = y
+        self.zpos = z
+        self.xvel = 0
+        self.yvel = 0
+        self.speed = 0.2
+        self.visible = 5
+        self.orient = 0 # 0-7 in 45 degree increments
+        self.inertial_damping = 0.70
+
 class Agent:
     def __init__(self, x, y, z, color, energy, state_size, action_size, hidden_size, genome):
         self.colors = ["blue", "green", "orange", "purple", "red", "teal", "violet", "yellow"]
@@ -130,14 +142,17 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[16],
-                 num_prev_states=2,
+                 hidden_size=[32],
+                 num_prev_states=1,
                  mutation_rate=0.001,
                  area_size=50,
                  scaling=1,
                  num_agents=100,
                  agent_start_energy=200,
                  agent_max_inventory=10,
+                 num_predators=3,
+                 predator_view_distance=5,
+                 predator_kill_distance=2,
                  food_sources=10,
                  food_spawns=20,
                  food_dist=5,
@@ -157,6 +172,7 @@ class game_space:
         self.spawns = 0
         self.births = 0
         self.deaths = 0
+        self.killed = 0
         self.food_picked = 0
         self.food_eaten = 0
         self.food_planted = 0
@@ -170,6 +186,9 @@ class game_space:
         self.num_agents = num_agents
         self.agent_max_inventory = agent_max_inventory
         self.agent_start_energy = agent_start_energy
+        self.num_predators = num_predators
+        self.predator_view_distance = predator_view_distance
+        self.predator_kill_distance = predator_kill_distance
         self.food_sources = food_sources
         self.food_spawns = food_spawns
         self.food_dist = food_dist
@@ -203,6 +222,7 @@ class game_space:
                              "visible_agents",
                              "adjacent_agents",
                              "mate_in_range",
+                             "visible_predators",
                              "previous_action",
                              "own_age",
                              "own_energy",
@@ -236,17 +256,21 @@ class game_space:
                     self.genome_size += self.hidden_size[i]*self.hidden_size[i+1]
         self.genome_size += self.action_size*self.hidden_size[-1]
         self.genome_store = []
+        self.previous_agents = deque()
         self.create_starting_food()
         self.create_genomes()
         self.create_new_agents(use_pool=True)
+        self.create_predators()
 
     def step(self):
         self.steps += 1
         self.set_environment_visibility()
         self.set_environment_temperature()
         self.set_agent_states()
-        self.apply_physics()
+        self.apply_agent_physics()
         self.run_agent_actions()
+        self.apply_predator_physics()
+        self.run_predator_actions()
         self.update_agent_status()
         self.update_pheromone_status()
         self.reproduce_food()
@@ -277,6 +301,35 @@ class game_space:
 #########################
 # Initialization routines
 #########################
+    def set_predator_entity(self, index):
+        xabs = self.predators[index].xpos
+        yabs = self.predators[index].ypos
+        zabs = self.predators[index].zpos
+        s = self.scaling * 2
+        texture = "textures/predator"
+        self.predators[index].entity = Entity(model='sphere',
+                                              color=color.white,
+                                              scale=(s,s,s),
+                                              position = (xabs, yabs, zabs),
+                                              texture=texture)
+
+    def spawn_random_predator(self):
+        xpos = random.random()*self.area_size
+        ypos = random.random()*self.area_size
+        zpos = -1*self.scaling
+        a = Predator(xpos,
+                     ypos,
+                     zpos)
+        self.predators.append(a)
+        index = len(self.predators)-1
+        if self.visuals == True:
+            self.set_predator_entity(index)
+
+    def create_predators(self):
+        self.predators = []
+        for n in range(self.num_predators):
+            self.spawn_random_predator()
+
     def create_genomes(self):
         self.genome_pool = []
         if os.path.exists(savedir + "/genome_store.pkl"):
@@ -389,6 +442,80 @@ class game_space:
     def distance(self, x1, y1, x2, y2):
         return math.sqrt(((x1-x2)**2)+((y1-y2)**2))
 
+    def propel(self, xv, yv, orient, speed):
+        xvel = xv
+        yvel = yv
+        # up
+        if orient == 0:
+            yvel += 1*speed
+        # up right
+        elif orient == 1:
+            yvel += 0.5*speed
+            xvel += 0.5*speed
+        # right
+        elif orient == 2:
+            xvel += 1*speed
+        # down right
+        elif orient == 3:
+            yvel -= 0.5*speed
+            xvel += 0.5*speed
+        # down
+        elif orient == 4:
+            yvel -= 1*speed
+        # down left
+        elif orient == 5:
+            yvel -= 0.5*speed
+            xvel -= 0.5*speed
+        # left
+        elif orient == 6:
+            xvel -= 1*speed
+        # up left
+        elif orient == 7:
+            yvel += 0.5*speed
+            xvel -= 0.5*speed
+        return xvel, yvel
+
+    def viewpoint(self, xpos, ypos, orient, distance):
+        xv = xpos
+        yv = ypos
+        # up
+        if orient == 0:
+            yv = ypos + distance*self.scaling
+        # up right
+        elif orient == 1:
+            yv = ypos + 0.5*distance*self.scaling
+            xv = xpos + 0.5*distance*self.scaling
+        # right
+        elif orient == 2:
+            xv = xpos + distance*self.scaling
+        # down right
+        elif orient == 3:
+            yv = ypos - 0.5*distance*self.scaling
+            xv = xpos + 0.5*distance*self.scaling
+        # down
+        elif orient == 4:
+            yv = ypos - distance*self.scaling
+        # down left
+        elif orient == 5:
+            yv = ypos - 0.5*distance*self.scaling
+            xv = xpos - 0.5*distance*self.scaling
+        # left
+        elif orient == 6:
+            xv = xpos - distance*self.scaling
+        # up left
+        elif orient == 7:
+            yv = ypos + 0.5*distance*self.scaling
+            xv = xpos - 0.5*distance*self.scaling
+        if xv > self.area_size:
+            xv -= self.area_size
+        if xv < 0:
+            xv += self.area_size
+        if yv > self.area_size:
+            yv -= self.area_size
+        if yv < 0:
+            yv += self.area_size
+        return xv, yv
+
 ########################
 # Environmental effects
 ########################
@@ -465,44 +592,8 @@ class game_space:
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
         orient = self.agents[index].orient
-        xv = xpos
-        yv = ypos
-        # up
-        if orient == 0:
-            yv = ypos + self.agent_view_distance*self.scaling
-        # up right
-        elif orient == 1:
-            yv = ypos + 0.5*self.agent_view_distance*self.scaling
-            xv = xpos + 0.5*self.agent_view_distance*self.scaling
-        # right
-        elif orient == 2:
-            xv = xpos + self.agent_view_distance*self.scaling
-        # down right
-        elif orient == 3:
-            yv = ypos - 0.5*self.agent_view_distance*self.scaling
-            xv = xpos + 0.5*self.agent_view_distance*self.scaling
-        # down
-        elif orient == 4:
-            yv = ypos - self.agent_view_distance*self.scaling
-        # down left
-        elif orient == 5:
-            yv = ypos - 0.5*self.agent_view_distance*self.scaling
-            xv = xpos - 0.5*self.agent_view_distance*self.scaling
-        # left
-        elif orient == 6:
-            xv = xpos - self.agent_view_distance*self.scaling
-        # up left
-        elif orient == 7:
-            yv = ypos + 0.5*self.agent_view_distance*self.scaling
-            xv = xpos - 0.5*self.agent_view_distance*self.scaling
-        if xv > self.area_size:
-            xv -= self.area_size
-        if xv < 0:
-            xv += self.area_size
-        if yv > self.area_size:
-            yv -= self.area_size
-        if yv < 0:
-            yv += self.area_size
+        distance = self.agent_view_distance
+        xv, yv = self.viewpoint(xpos, ypos, orient, distance)
         return xv, yv
 
     def get_visible_agents(self, index):
@@ -557,6 +648,36 @@ class game_space:
         shortest_value = distances[shortest_index]
         return shortest_index, shortest_value
 
+    def kill_agents(self, dead):
+        for index in dead:
+            a = self.agents[index].age
+            h = self.agents[index].happiness
+            f = a + h
+            g = self.agents[index].genome
+            self.store_genome(g, f)
+            self.add_previous_agent(g, a)
+            self.deaths += 1
+            affected = self.get_adjacent_agent_indices(index)
+            for i in affected:
+                self.agents[i].happiness -= 10
+            if self.visuals == True:
+                self.agents[index].entity.disable()
+                del(self.agents[index].entity)
+        new_agents = [i for j, i in enumerate(self.agents) if j not in dead]
+        self.agents = list(new_agents)
+        if len(self.agents) < self.num_agents:
+            deficit = self.num_agents - len(self.agents)
+            for _ in range(deficit):
+                genome = None
+                if len(self.agents) > 10:
+                    if random.random() > 0.05:
+                        genome = self.make_genome_from_active()
+                    else:
+                        genome = self.make_random_genome()
+                else:
+                    genome = self.make_random_genome()
+                self.spawn_random_agent(genome)
+
     def update_agent_status(self):
         # Other things can happen here such as
         # - environmental effects
@@ -577,32 +698,8 @@ class game_space:
             self.agents[index].energy -= energy_drain
             if self.agents[index].energy <= 0:
                 dead.add(index)
-                f = self.agents[index].age + self.agents[index].happiness
-                g = self.agents[index].genome
-                self.store_genome(g, f)
         if len(dead) > 0:
-            for index in dead:
-                self.deaths += 1
-                affected = self.get_adjacent_agent_indices(index)
-                for i in affected:
-                    self.agents[i].happiness -= 10
-                if self.visuals == True:
-                    self.agents[index].entity.disable()
-                    del(self.agents[index].entity)
-            new_agents = [i for j, i in enumerate(self.agents) if j not in dead]
-            self.agents = list(new_agents)
-        if len(self.agents) < self.num_agents:
-            deficit = self.num_agents - len(self.agents)
-            for _ in range(deficit):
-                genome = None
-                if len(self.agents) > 10:
-                    if random.random() > 0.05:
-                        genome = self.make_genome_from_active()
-                    else:
-                        genome = self.make_random_genome()
-                else:
-                    genome = self.make_random_genome()
-                self.spawn_random_agent(genome)
+            self.kill_agents(dead)
 
     def update_agent_position(self, index):
         self.agents[index].xpos += self.agents[index].xvel
@@ -616,13 +713,100 @@ class game_space:
         if self.agents[index].ypos < 0:
             self.agents[index].ypos += self.area_size
 
-    def apply_physics(self):
+    def apply_agent_physics(self):
         for index in range(len(self.agents)):
-            self.apply_inertial_damping(index)
+            self.apply_agent_inertial_damping(index)
 
-    def apply_inertial_damping(self, index):
+    def apply_agent_inertial_damping(self, index):
         self.agents[index].xvel = self.agents[index].xvel * self.agents[index].inertial_damping
         self.agents[index].yvel = self.agents[index].yvel * self.agents[index].inertial_damping
+
+##################
+# Predator actions
+##################
+    def get_predators_in_radius(self, xpos, ypos, radius):
+        ret = []
+        for i in range(len(self.predators)):
+            ax = self.predators[i].xpos
+            ay = self.predators[i].ypos
+            if self.distance(xpos, ypos, ax, ay) <= radius*self.scaling:
+                ret.append(i)
+        return ret
+
+    def get_visible_predators(self, index):
+        xv, yv = self.get_viewpoint(index)
+        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
+        predator_count = len(predators)
+        return predator_count
+
+    def predator_move_random(self, index):
+        action = random.choice([0,1,2])
+        if action == 0:
+            self.predator_propel(index)
+        elif action == 1:
+            self.predator_rotate_right(index)
+        else:
+            self.predator_rotate_left(index)
+
+    def predator_propel(self, index):
+        orient = self.predators[index].orient
+        speed = self.predators[index].speed
+        xvel = self.predators[index].xvel
+        yvel = self.predators[index].yvel
+        xv, yv = self.propel(xvel, yvel, orient, speed)
+        self.predators[index].xvel = xv
+        self.predators[index].yvel = yv
+
+    def predator_rotate_right(self, index):
+        self.predators[index].orient += 1
+        if self.predators[index].orient > 7:
+            self.predators[index].orient = 0
+
+    def predator_rotate_left(self, index):
+        self.predators[index].orient -= 1
+        if self.predators[index].orient < 0:
+            self.predators[index].orient = 7
+
+    def apply_predator_physics(self):
+        for index in range(len(self.predators)):
+            self.apply_predator_inertial_damping(index)
+
+    def apply_predator_inertial_damping(self, index):
+        self.predators[index].xvel = self.predators[index].xvel * self.predators[index].inertial_damping
+        self.predators[index].yvel = self.predators[index].yvel * self.predators[index].inertial_damping
+
+    def update_predator_position(self, index):
+        self.predators[index].xpos += self.predators[index].xvel
+        if self.predators[index].xpos > self.area_size:
+            self.predators[index].xpos -= self.area_size
+        if self.predators[index].xpos < 0:
+            self.predators[index].xpos += self.area_size
+        self.predators[index].ypos += self.predators[index].yvel
+        if self.predators[index].ypos > self.area_size:
+            self.predators[index].ypos -= self.area_size
+        if self.predators[index].ypos < 0:
+            self.predators[index].ypos += self.area_size
+
+    def run_predator_actions(self):
+        for index in range(len(self.predators)):
+            xpos = self.predators[index].xpos
+            ypos = self.predators[index].ypos
+            radius = self.predator_kill_distance
+            # If agents near enough to predator, kill them
+            victims = self.get_agents_in_radius(xpos, ypos, radius)
+            if len(victims) > 0:
+                self.killed += len(victims)
+                self.kill_agents(victims)
+            orient = self.predators[index].orient
+            distance = self.predator_view_distance
+            xv, yv = self.viewpoint(xpos, ypos, orient, distance)
+            # If agents in viewfield, move forward
+            targets = self.get_agents_in_radius(xv, yv, distance)
+            if len(targets) > 0:
+                self.predator_propel(index)
+            else:
+                self.predator_move_random(index)
+            self.update_predator_position(index)
 
 ###############
 # Agent actions
@@ -647,38 +831,15 @@ class game_space:
         self.agents[index].orient -= 1
         if self.agents[index].orient < 0:
             self.agents[index].orient = 7
-        return
 
     def action_propel(self, index):
         orient = self.agents[index].orient
-        # up
-        if orient == 0:
-            self.agents[index].yvel += 1*self.agents[index].speed
-        # up right
-        elif orient == 1:
-            self.agents[index].yvel += 0.5*self.agents[index].speed
-            self.agents[index].xvel += 0.5*self.agents[index].speed
-        # right
-        elif orient == 2:
-            self.agents[index].xvel += 1*self.agents[index].speed
-        # down right
-        elif orient == 3:
-            self.agents[index].yvel -= 0.5*self.agents[index].speed
-            self.agents[index].xvel += 0.5*self.agents[index].speed
-        # down
-        elif orient == 4:
-            self.agents[index].yvel -= 1*self.agents[index].speed
-        # down left
-        elif orient == 5:
-            self.agents[index].yvel -= 0.5*self.agents[index].speed
-            self.agents[index].xvel -= 0.5*self.agents[index].speed
-        # left
-        elif orient == 6:
-            self.agents[index].xvel -= 1*self.agents[index].speed
-        # up left
-        elif orient == 7:
-            self.agents[index].yvel += 0.5*self.agents[index].speed
-            self.agents[index].xvel -= 0.5*self.agents[index].speed
+        speed = self.agents[index].speed
+        xvel = self.agents[index].xvel
+        yvel = self.agents[index].yvel
+        xv, yv = self.propel(xvel, yvel, orient, speed)
+        self.agents[index].xvel = xv
+        self.agents[index].yvel = yv
 
     def action_pick_food(self, index):
         carrying = self.agents[index].food_inventory
@@ -1064,6 +1225,27 @@ class game_space:
             new_genomes.append(gm)
         return new_genomes
 
+    def add_previous_agent(self, genome, age):
+        if len(self.previous_agents) >= 100:
+            self.previous_agents.popleft()
+        self.previous_agents.append([genome, age])
+
+    def get_best_previous_agents(self, num):
+        ages = [x[1] for x in self.previous_agents]
+        indices = np.argpartition(ages,-num)[-num:]
+        genomes = [self.previous_agents[i][0] for i in indices]
+        return genomes
+
+    def make_genome_from_previous(self):
+        if len(self.previous_agents) < 10:
+            return self.make_random_genome()
+        genomes = self.get_best_previous_agents(10)
+        parents = random.sample(genomes, 2)
+        offspring = self.reproduce_genome(parents[0], parents[1], 1)
+        chosen = random.choice(offspring)
+        mutated = self.mutate_genome(chosen, 1)[0]
+        return mutated
+
     def store_genome(self, genome, fitness):
         min_fitness = 0
         min_item = 0
@@ -1079,29 +1261,8 @@ class game_space:
                 self.genome_store.pop(min_item)
             self.genome_store.append([fitness, genome])
 
-    # Don't do this. It is akin to creating those crazy augments from Star Trek
-    def make_genome_from_store(self):
-        if len(self.genome_store) < 2:
-            return self.make_random_genome()
-        x = random.sample(self.genome_store, 2)
-        parents = []
-        for item in x:
-            a, g = item
-            parents.append(g)
-        offspring = self.reproduce_genome(parents[0], parents[1], 1)
-        chosen = random.choice(offspring)
-        mutated = self.mutate_genome(chosen, 1)[0]
-        return mutated
-
     def make_genome_from_active(self):
-        genomes = [x.genome for x in self.agents if x.age > 50]
-        if len(genomes) < 2:
-            return self.make_genome_from_store()
-        parents = random.sample(genomes, 2)
-        offspring = self.reproduce_genome(parents[0], parents[1], 1)
-        chosen = random.choice(offspring)
-        mutated = self.mutate_genome(chosen, 1)[0]
-        return mutated
+        return self.make_genome_from_previous()
 
 
 
@@ -1149,7 +1310,7 @@ class game_space:
         msg += "Food: " + str(num_food) + " energy: " + str(food_energy) + "\n"
         msg += "\n"
         msg += "Spawns: " + str(self.spawns) + " Births: " + str(self.births)
-        msg += " Deaths: " + str(self.deaths) + "\n"
+        msg += " Deaths: " + str(self.deaths) + " Killed: " + str(self.killed) + "\n"
         msg += "\n"
         msg += "Food picked: " + str(self.food_picked)
         msg += " eaten: " + str(self.food_eaten) 
@@ -1170,6 +1331,18 @@ class game_space:
 # update callback for ursina
 def update():
     gs.step()
+
+    # Change background to reflect season and time of day
+    tod = gs.agent_view_distance # 1-5
+    tod = (tod+2)*0.1
+    season = gs.environment_temperature # 0-40
+    season = int(season*0.1)
+    c1 = int(100*tod)
+    c2 = int(50*tod)
+    bgcs = [[0, c2, c1], [0,c1,c1], [c2, c1, 0], [c1, c1, 0], [c1, c2, 0]]
+    bgc = bgcs[season]
+    window.color = color.rgb(*bgc)
+
     # Update agent positions
     for index, agent in enumerate(gs.agents):
         if gs.agents[index].entity is not None:
@@ -1179,6 +1352,17 @@ def update():
             gs.agents[index].entity.position = (xabs, yabs, zabs)
             orient = gs.agents[index].orient
             gs.agents[index].entity.rotation = (45*orient, 90, 0)
+
+    # Update predator positions
+    for index, predator in enumerate(gs.predators):
+        if gs.predators[index].entity is not None:
+            xabs = gs.predators[index].xpos
+            yabs = gs.predators[index].ypos
+            zabs = gs.predators[index].zpos
+            gs.predators[index].entity.position = (xabs, yabs, zabs)
+            orient = gs.predators[index].orient
+            gs.predators[index].entity.rotation = (45*orient, 90, 0)
+
 
 # Train the game
 random.seed(1337)
