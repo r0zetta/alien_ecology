@@ -208,6 +208,7 @@ class game_space:
                         "mate": 7,
                         "emit_pheromone": 8,
                         "move_random": 9}
+        self.agent_actions = Counter()
         self.observations = ["visible_food",
                              "adjacent_food",
                              "food_in_range",
@@ -215,6 +216,7 @@ class game_space:
                              "adjacent_pheromones",
                              "visible_agents",
                              "adjacent_agents",
+                             "adjacent_agent_count",
                              "mate_in_range",
                              "visible_predators",
                              "previous_action",
@@ -537,6 +539,8 @@ class game_space:
     def run_agent_actions(self):
         for n in range(len(self.agents)):
             action = self.agents[n].get_action()
+            a = [x for x, c in self.actions.items()]
+            self.agent_actions[a[int(action)]] += 1
             self.apply_agent_action(n, action)
             self.update_agent_position(n)
 
@@ -613,6 +617,9 @@ class game_space:
             agent_energy += self.agents[index].energy
         agent_concentration = agent_energy/self.visible_area
         return agent_concentration
+
+    def get_adjacent_agent_count(self, index):
+        return self.count_adjacent_agents(index)
 
     def count_adjacent_agents(self, index):
         xpos = self.agents[index].xpos
@@ -1282,6 +1289,7 @@ class game_space:
         mtemp = int(np.mean([x.temperature for x in self.agents]))
         vrange = self.agent_view_distance
         gsitems = len(self.genome_store)
+        mpa = np.mean([x[1] for x in self.previous_agents])
         gf = []
         for item in self.genome_store:
             f, g = item
@@ -1305,6 +1313,9 @@ class game_space:
         msg += " max age: " + str(max_age)
         msg += " mean hap: " + "%.2f"%mean_hap
         msg += " max hap: " + str(max_hap) + "\n"
+        msg += "\n"
+        msg += "Previous agent mean age: " + "%.2f"%mpa + "\n"
+        msg += "\n"
         msg += "Food: " + str(num_food) + " energy: " + str(food_energy) + "\n"
         msg += "\n"
         msg += "Spawns: " + str(self.spawns) + " Births: " + str(self.births)
@@ -1320,7 +1331,15 @@ class game_space:
         msg += "Items in genome store: " + str(gsitems) 
         msg += " mean fitness: " + "%.2f"%gsmea + " max fitness: " + str(gsmax) + "\n"
         msg += "\n"
+        for x, c in self.agent_actions.items():
+            msg += str(x) + ": " + str(c) + "\n"
+        msg += "\n"
         return msg
+
+    def print_actions(self):
+        total_actions = sum([c for x, c in self.agent_actions.items()])
+        num_actions = len(self.agent_actions.items())
+        # XXX histogram XXX
 
     def print_stats(self):
         os.system('clear')
