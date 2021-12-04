@@ -44,16 +44,10 @@ class GN_model:
         return action
 
 # Actions:
-# rotate
-# propel
 # increase/decrease oscillator[n] period
-# emit pheromone [n]
 # emit sound [n]
-# mate
 # kill
 # stun
-# pick food
-# drop food
 # kick
 
 class Predator:
@@ -153,17 +147,17 @@ class game_space:
                  num_predators=3,
                  predator_view_distance=5,
                  predator_kill_distance=2,
-                 food_sources=10,
+                 food_sources=20,
                  food_spawns=20,
                  food_dist=5,
-                 food_repro_energy=20,
+                 food_repro_energy=15,
                  food_start_energy=10,
                  food_energy_growth=0.01,
                  food_plant_success=1,
                  pheromone_decay=0.90,
-                 min_reproduction_age=40,
+                 min_reproduction_age=30,
                  min_reproduction_energy=50,
-                 reproduction_cost=10,
+                 reproduction_cost=0,
                  agent_view_distance=5,
                  visuals=True,
                  save_stuff=True,
@@ -690,10 +684,10 @@ class game_space:
             energy_drain = 1
             temperature = self.agents[index].temperature
             if temperature > 30:
-                energy_drain += (temperature - 30) * 0.4
+                energy_drain += (temperature - 30) * 0.1
                 self.agents[index].happiness -= 1
             if temperature < 10:
-                energy_drain += (10 - temperature) * 0.4
+                energy_drain += (10 - temperature) * 0.1
                 self.agents[index].happiness -= 1
             self.agents[index].energy -= energy_drain
             if self.agents[index].energy <= 0:
@@ -1144,7 +1138,11 @@ class game_space:
         self.food.pop(index)
 
     def reproduce_food(self):
-        growth = (1+((self.environment_temperature-20)/10))*self.food_energy_growth
+        growth = self.food_energy_growth
+        if self.environment_temperature < 7:
+            growth = -2 * self.food_energy_growth
+        if self.environment_temperature > 30:
+            growth = -1 * self.food_energy_growth
         dead = []
         for index, f in enumerate(self.food):
             self.food[index].energy += growth
