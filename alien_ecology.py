@@ -152,7 +152,7 @@ class game_space:
                  food_dist=5,
                  food_repro_energy=15,
                  food_start_energy=10,
-                 food_energy_growth=0.01,
+                 food_energy_growth=0.1,
                  food_plant_success=1,
                  pheromone_decay=0.90,
                  min_reproduction_age=30,
@@ -523,7 +523,7 @@ class game_space:
 
     def set_environment_temperature(self):
         osc = np.sin(self.steps/100)
-        self.environment_temperature = 20 + (20*osc)
+        self.environment_temperature = 8 + self.agent_view_distance + random.random()*7 + (20*osc)
 
     def set_agent_temperature(self, index):
         temp = self.environment_temperature - 5 + (self.count_adjacent_agents(index))
@@ -1145,11 +1145,11 @@ class game_space:
         self.food.pop(index)
 
     def reproduce_food(self):
-        growth = self.food_energy_growth
-        if self.environment_temperature < 7:
-            growth = -2 * self.food_energy_growth
-        if self.environment_temperature > 30:
-            growth = -1 * self.food_energy_growth
+        growth = random.random()*self.food_energy_growth
+        if self.environment_temperature < 5:
+            growth = -1.2 * growth
+        if self.environment_temperature > 35:
+            growth = (random.random()-(0.2*(self.environment_temperature-35))) * growth
         dead = []
         for index, f in enumerate(self.food):
             self.food[index].energy += growth
@@ -1165,6 +1165,8 @@ class game_space:
                 del(self.food[index].entity)
         new_food = [i for j, i in enumerate(self.food) if j not in dead]
         self.food = new_food
+        if len(self.food) < 1:
+            self.create_starting_food()
 
     def plant_food(self, xpos, ypos):
         z = -1*self.scaling
