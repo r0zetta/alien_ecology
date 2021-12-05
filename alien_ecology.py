@@ -136,19 +136,19 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[32],
+                 hidden_size=[32, 32],
                  num_prev_states=1,
                  mutation_rate=0.001,
                  area_size=50,
                  scaling=1,
                  num_agents=100,
-                 agent_start_energy=200,
+                 agent_start_energy=500,
                  agent_max_inventory=10,
-                 num_predators=3,
+                 num_predators=5,
                  predator_view_distance=5,
                  predator_kill_distance=2,
-                 food_sources=20,
-                 food_spawns=20,
+                 food_sources=40,
+                 food_spawns=10,
                  food_dist=5,
                  food_repro_energy=15,
                  food_start_energy=10,
@@ -275,7 +275,7 @@ class game_space:
                 ngs = random.sample(self.genome_store, 75)
                 self.genome_store = ngs
         if self.save_stuff == True:
-            if self.steps % 200 == 0:
+            if self.steps % 20 == 0:
                 self.save_genomes()
         self.print_stats()
 
@@ -1257,10 +1257,7 @@ class game_space:
         min_fitness = 0
         min_item = 0
         if len(self.genome_store) > 0:
-            fitnesses = []
-            for item in self.genome_store:
-                f, g = item
-                fitnesses.append(f)
+            fitnesses = [x[0] for x in self.genome_store]
             min_item = np.argmin(fitnesses)
             min_fitness = fitnesses[min_item]
         if fitness > self.agent_start_energy and fitness > min_fitness:
@@ -1292,10 +1289,7 @@ class game_space:
         vrange = self.agent_view_distance
         gsitems = len(self.genome_store)
         mpa = np.mean([x[1] for x in self.previous_agents])
-        gf = []
-        for item in self.genome_store:
-            f, g = item
-            gf.append(f)
+        gf = [x[0] for x in self.genome_store]
         gsmea = 0
         gsmax = 0
         if len(gf) > 0:
@@ -1354,7 +1348,7 @@ def update():
     # Change background to reflect season and time of day
     tod = gs.agent_view_distance # 1-5
     tod = (tod+2)*0.1
-    season = gs.environment_temperature # 0-40
+    season = max(0, min(gs.environment_temperature, 40))
     season = int(season*0.1)
     c1 = int(100*tod)
     c2 = int(50*tod)
