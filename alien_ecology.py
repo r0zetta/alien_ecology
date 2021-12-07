@@ -772,6 +772,13 @@ class game_space:
 
     def reset_agents(self, reset):
         for index in reset:
+            a = self.agents[index].age
+            h = self.agents[index].happiness
+            d = self.agents[index].distance_travelled
+            f = a + h + d
+            g = self.agents[index].model.get_w()
+            self.store_genome(g, f)
+            self.add_previous_agent(g, f)
             self.deaths += 1
             self.resets += 1
             affected = self.get_adjacent_agent_indices(index)
