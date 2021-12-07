@@ -12,7 +12,7 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.w = w
         self.l = l
-        self.fc_layers = []
+        self.fc_layers = nn.ModuleList()
         for item in self.w:
             s1, s2, d = item
             fc = nn.Linear(s1, s2, bias=False)
@@ -24,7 +24,7 @@ class Net(nn.Module):
             if i+1 < len(self.fc_layers):
                 x = F.relu(self.fc_layers[i](x))
             else:
-                x = F.softmax(F.relu(self.fc_layers[i](x)))
+                x = F.softmax(F.relu(self.fc_layers[i](x)), dim=-1)
         return x
 
     def get_w(self):
@@ -37,7 +37,7 @@ class Net(nn.Module):
 
     def get_action(self, state):
         if self.l == True:
-            num_actions = self.w[-1][0]
+            num_actions = self.w[-1][1]
             probs = self.forward(state)
             action = np.random.choice(num_actions, p=np.squeeze(probs.detach().numpy()))
             log_prob = torch.log(probs.squeeze(0)[action])
@@ -52,9 +52,9 @@ class GN_model:
     def __init__(self, w, l=False):
         self.l = l
         self.w = w
-        self.policy = Net(self.w, self.l)
+        self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(params = self.policy.parameters(), lr=3e-4)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4)
             self.reset()
 
     def num_params(self):
@@ -81,11 +81,16 @@ class GN_model:
         self.log_probs = []
 
     def record_reward(self, reward):
+        if reward is None:
+            reward = 0
         self.rewards.append(reward)
 
     def update_policy(self):
         discounted_rewards = []
         GAMMA = 0.9
+        if len(self.rewards) < 2:
+            self.reset()
+            return
         for t in range(len(self.rewards)):
             Gt = 0 
             pw = 0
@@ -95,7 +100,8 @@ class GN_model:
             discounted_rewards.append(Gt)
 
         discounted_rewards = torch.tensor(discounted_rewards)
-        discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / (discounted_rewards.std() + 1e-9)
+        if len(discounted_rewards) > 1:
+            discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / (discounted_rewards.std() + 1e-9)
 
         policy_gradient = []
         for log_prob, Gt in zip(self.log_probs, discounted_rewards):
@@ -158,11 +164,11 @@ class Agent:
         self.color = color
         self.color_str = self.colors[color]
         self.genome = genome
-        weights = []
+        self.weights = []
         m1 = 0
         m2 = self.state_size * self.hidden_size[0]
         w = torch.Tensor(np.reshape(genome[m1:m2], (self.hidden_size[0], self.state_size)))
-        weights.append([self.state_size, self.hidden_size[0], w])
+        self.weights.append([self.state_size, self.hidden_size[0], w])
         if len(self.hidden_size) > 1:
             for i in range(len(self.hidden_size)):
                 if i+1 < len(self.hidden_size):
@@ -170,10 +176,10 @@ class Agent:
                     m2 = m1 + (self.hidden_size[i] * self.hidden_size[i+1])
                     w = torch.Tensor(np.reshape(genome[m1:m2],
                                      (self.hidden_size[i], self.hidden_size[i+1])))
-                    weights.append([self.hidden_size[i], self.hidden_size[i+1], w])
+                    self.weights.append([self.hidden_size[i], self.hidden_size[i+1], w])
         w = torch.Tensor(np.reshape(genome[m2:], (action_size, hidden_size[-1])))
-        weights.append([self.hidden_size[-1], self.action_size, w])
-        self.model = GN_model(weights, self.learnable)
+        self.weights.append([self.hidden_size[-1], self.action_size, w])
+        self.model = GN_model(self.weights, self.learnable)
         self.state = None
         self.entity = None
         self.reset()
@@ -220,6 +226,7 @@ class game_space:
     def __init__(self,
                  hidden_size=[16],
                  num_prev_states=1,
+                 learners=True,
                  mutation_rate=0.001,
                  area_size=50,
                  year_length=100,
@@ -247,12 +254,14 @@ class game_space:
                  savedir="alien_ecology_save"):
         self.steps = 0
         self.spawns = 0
+        self.resets = 0
         self.births = 0
         self.deaths = 0
         self.killed = 0
         self.food_picked = 0
         self.food_eaten = 0
         self.food_planted = 0
+        self.learners = learners
         self.visuals = visuals
         self.savedir = savedir
         self.save_stuff = save_stuff
@@ -340,7 +349,10 @@ class game_space:
         self.previous_agents = deque()
         self.create_starting_food()
         self.create_genomes()
-        self.create_new_agents(use_pool=True)
+        if self.learners == True:
+            self.create_new_learner_agents()
+        else:
+            self.create_new_evolvable_agents(use_pool=True)
         self.create_predators()
 
     def step(self):
@@ -452,16 +464,21 @@ class game_space:
                                            position = (xabs, yabs, zabs),
                                            texture=texture)
 
-    def spawn_random_agent(self, genome):
+    def spawn_learning_agent(self, genome):
+        self.spawn_new_agent(genome, True)
+
+    def spawn_evolving_agent(self, genome):
+        self.spawn_new_agent(genome, False)
+
+    def spawn_new_agent(self, genome, learner):
         self.spawns += 1
         xpos = random.random()*self.area_size
         ypos = random.random()*self.area_size
         zpos = -1
-        learnable = False
         a = Agent(xpos,
                   ypos,
                   zpos,
-                  learnable,
+                  learner,
                   0,
                   self.agent_start_energy,
                   self.state_size,
@@ -474,15 +491,25 @@ class game_space:
         if self.visuals == True:
             self.set_agent_entity(index)
 
-    def create_new_agents(self, use_pool=False):
+    def create_new_evolvable_agents(self, use_pool=False):
         self.agents = []
         if use_pool == True:
             for genome in self.genome_pool:
-                self.spawn_random_agent(genome)
+                self.spawn_evolving_agent(genome)
         else:
             for n in range(self.num_agents):
                 genome = self.make_random_genome()
-                self.spawn_random_agent(genome)
+                self.spawn_evolving_agent(genome)
+
+    def create_new_learner_agents(self, use_pool=False):
+        self.agents = []
+        if use_pool == True:
+            for genome in self.genome_pool:
+                self.spawn_learning_agent(genome)
+        else:
+            for n in range(self.num_agents):
+                genome = self.make_random_genome()
+                self.spawn_learning_agent(genome)
 
     def set_food_entity(self, index):
         xabs = self.food[index].xpos
@@ -753,11 +780,14 @@ class game_space:
     def reset_agents(self, reset):
         for index in reset:
             self.deaths += 1
+            self.resets += 1
             affected = self.get_adjacent_agent_indices(index)
             for i in affected:
                 self.agents[i].happiness -= 5
             self.agents[index].model.update_policy()
             self.agents[index].reset()
+            self.agents[index].xpos = random.random()*self.area_size
+            self.agents[index].ypos = random.random()*self.area_size
             self.set_initial_agent_state(index)
 
     def kill_agents(self, dead):
@@ -766,7 +796,7 @@ class game_space:
             h = self.agents[index].happiness
             d = self.agents[index].distance_travelled
             f = a + h + d
-            g = self.agents[index].genome
+            g = self.agents[index].model.get_w()
             self.store_genome(g, f)
             self.add_previous_agent(g, f)
             self.deaths += 1
@@ -789,7 +819,7 @@ class game_space:
                         genome = self.make_random_genome()
                 else:
                     genome = self.make_random_genome()
-                self.spawn_random_agent(genome)
+                self.spawn_evolving_agent(genome)
 
     def update_agent_status(self):
         # Other things can happen here such as
@@ -923,8 +953,18 @@ class game_space:
             # If agents near enough to predator, kill them
             victims = self.get_agents_in_radius(xpos, ypos, radius)
             if len(victims) > 0:
+                dead = []
+                reset = []
                 self.killed += len(victims)
-                self.kill_agents(victims)
+                for v in victims:
+                    if self.agents[v].learnable == True:
+                        reset.append(v)
+                    else:
+                        dead.append(v)
+                    if len(reset) > 0:
+                        self.reset_agents(reset)
+                    if len(dead) > 0:
+                        self.kill_agents(dead)
             orient = self.predators[index].orient
             distance = self.predator_view_distance
             xv, yv = self.viewpoint(xpos, ypos, orient, distance)
@@ -1424,6 +1464,13 @@ class game_space:
         agent_energy = int(sum([x.energy for x in self.agents]))
         num_food = len(self.food)
         food_energy = int(sum([x.energy for x in self.food]))
+        evolving = 0
+        learnable = 0
+        for index in range(len(self.agents)):
+            if self.agents[index].learnable == True:
+                learnable += 1
+            else:
+                evolving += 1
         ages = [x.age for x in self.agents]
         max_age = np.max(ages)
         mean_age = int(np.mean(ages))
@@ -1454,6 +1501,7 @@ class game_space:
         msg += " genome size: " + str(self.genome_size) + "\n"
         msg += "\n"
         msg += "Agents: " + str(num_agents) + " energy: " + str(agent_energy) + "\n"
+        msg += "Learnable: " + str(learnable) + " evolving: " + str(evolving) + "\n"
         msg += "mean age: " + "%.2f"%mean_age
         msg += " max age: " + str(max_age)
         msg += " mean hap: " + "%.2f"%mean_hap
@@ -1465,8 +1513,10 @@ class game_space:
         msg += "\n"
         msg += "Food: " + str(num_food) + " energy: " + str(food_energy) + "\n"
         msg += "\n"
-        msg += "Spawns: " + str(self.spawns) + " Births: " + str(self.births)
-        msg += " Deaths: " + str(self.deaths) + " Killed: " + str(self.killed) + "\n"
+        msg += "Spawns: " + str(self.spawns)
+        msg += " resets: " + str(self.resets)
+        msg += " births: " + str(self.births)
+        msg += " deaths: " + str(self.deaths) + " Killed: " + str(self.killed) + "\n"
         msg += "\n"
         msg += "Food picked: " + str(self.food_picked)
         msg += " eaten: " + str(self.food_eaten) 
