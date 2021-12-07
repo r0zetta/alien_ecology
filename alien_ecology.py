@@ -201,16 +201,16 @@ class game_space:
         self.agent_view_distance = agent_view_distance
         self.visible_area = math.pi*(self.agent_view_distance**2)
         self.mutation_rate = mutation_rate
-        self.actions = {"null": 0,
-                        "rotate_right": 1,
-                        "rotate_left": 2,
-                        "propel": 3,
-                        "pick_food": 4,
-                        "plant_food": 5,
-                        "eat_food": 6,
-                        "mate": 7,
-                        "emit_pheromone": 8,
-                        "move_random": 9}
+        self.actions = ["null",
+                        "rotate_right",
+                        "rotate_left",
+                        "propel",
+                        "pick_food",
+                        "plant_food",
+                        "eat_food",
+                        "mate",
+                        "emit_pheromone",
+                        "move_random"]
         self.agent_actions = Counter()
         self.observations = ["visible_food",
                              "adjacent_food",
@@ -537,9 +537,9 @@ class game_space:
 ########################
     def run_agent_actions(self):
         for n in range(len(self.agents)):
-            action = self.agents[n].get_action()
-            a = [x for x, c in self.actions.items()]
-            self.agent_actions[a[int(action)]] += 1
+            action = int(self.agents[n].get_action())
+            a = self.actions[action]
+            self.agent_actions[a] += 1
             self.apply_agent_action(n, action)
             self.update_agent_position(n)
 
@@ -831,10 +831,8 @@ class game_space:
 ###############
     def apply_agent_action(self, index, action):
         self.agents[index].prev_action = action
-        agent_functions = []
-        for x, c in self.actions.items():
-            agent_functions.append("action_" + x)
-        class_method = getattr(self, agent_functions[action])
+        agent_function = "action_" + self.actions[action]
+        class_method = getattr(self, agent_function)
         return class_method(index)
 
     def action_null(self, index):
