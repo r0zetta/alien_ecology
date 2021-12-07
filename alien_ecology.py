@@ -201,8 +201,7 @@ class game_space:
         self.agent_view_distance = agent_view_distance
         self.visible_area = math.pi*(self.agent_view_distance**2)
         self.mutation_rate = mutation_rate
-        self.actions = ["null",
-                        "rotate_right",
+        self.actions = ["rotate_right",
                         "rotate_left",
                         "propel",
                         "pick_food",
@@ -557,8 +556,6 @@ class game_space:
     def birth_new_agent(self, index1, index2):
         self.births += 1
         self.spawns += 1
-        self.agents[index1].happiness += 100
-        self.agents[index2].happiness += 100
         xpos = self.agents[index1].xpos
         ypos = self.agents[index2].ypos
         zpos = -1
@@ -883,6 +880,8 @@ class game_space:
             self.food[fi].energy -= 2
             if self.food[fi].energy < 0:
                 self.remove_food(fi)
+        else:
+            self.agents[index].happiness -= 1
 
     def action_eat_food(self, index):
         if self.agents[index].food_inventory > 0:
@@ -893,6 +892,8 @@ class game_space:
                 self.agents[index].energy += 20
                 self.agents[index].happiness += 100
             self.agents[index].food_inventory -= 1
+        else:
+            self.agents[index].happiness -= 1
 
     def action_plant_food(self, index):
         if self.agents[index].food_inventory > 0:
@@ -903,22 +904,25 @@ class game_space:
             if random.random() <= self.food_plant_success:
                 self.plant_food(xpos, ypos)
                 self.agents[index].happiness += 20
+        else:
+            self.agents[index].happiness -= 1
 
     def action_mate(self, index):
-        if self.agents[index].energy < self.min_reproduction_energy:
-            return
-        if self.agents[index].age < self.min_reproduction_age:
-            return
-        if len(self.agents) < 2:
-            return
-        ai, val = self.get_nearest_agent(index)
-        if ai is not None:
-            if val <= 1:
-                if self.agents[ai].energy >= self.min_reproduction_energy:
-                    if self.agents[ai].age >= self.min_reproduction_age:
-                        self.birth_new_agent(index, ai)
-                        self.agents[index].energy -= self.reproduction_cost
-                        self.agents[ai].energy -= self.reproduction_cost
+        if self.agents[index].energy >= self.min_reproduction_energy:
+            if self.agents[index].age >= self.min_reproduction_age:
+                ai, val = self.get_nearest_agent(index)
+                if ai is not None:
+                    if val <= 1:
+                        if self.agents[ai].energy >= self.min_reproduction_energy:
+                            if self.agents[ai].age >= self.min_reproduction_age:
+                                self.birth_new_agent(index, ai)
+                                self.agents[index].happiness += 100
+                                self.agents[ai].happiness += 100
+                                self.agents[index].energy -= self.reproduction_cost
+                                self.agents[ai].energy -= self.reproduction_cost
+                                return
+        self.agents[index].happiness -= 1
+        return
 
     def action_emit_pheromone(self, index):
         xpos = self.agents[index].xpos
