@@ -212,6 +212,7 @@ class game_space:
                         "emit_pheromone",
                         "move_random"]
         self.agent_actions = Counter()
+        self.recent_actions = deque()
         self.observations = ["visible_food",
                              "adjacent_food",
                              "food_in_range",
@@ -226,6 +227,7 @@ class game_space:
                              "own_age",
                              "own_energy",
                              "own_temperature",
+                             "distance_moved",
                              "own_happiness",
                              "own_xposition",
                              "own_yposition",
@@ -535,19 +537,28 @@ class game_space:
 ########################
 # Agent runtime routines
 ########################
+    def record_recent_actions(self, action):
+        if len(self.recent_actions) > 10000:
+            self.recent_actions.popleft()
+        self.recent_actions.append(action)
+        ra = Counter()
+        for a in self.recent_actions:
+            ra[self.actions[a]] += 1
+        self.agent_actions = ra
+
     def run_agent_actions(self):
         for n in range(len(self.agents)):
             action = int(self.agents[n].get_action())
             a = self.actions[action]
-            self.agent_actions[a] += 1
+            self.record_recent_actions(action)
             self.apply_agent_action(n, action)
             self.update_agent_position(n)
 
     def birth_new_agent(self, index1, index2):
         self.births += 1
         self.spawns += 1
-        self.agents[index1].happiness += 50
-        self.agents[index2].happiness += 50
+        self.agents[index1].happiness += 100
+        self.agents[index2].happiness += 100
         xpos = self.agents[index1].xpos
         ypos = self.agents[index2].ypos
         zpos = -1
@@ -666,11 +677,11 @@ class game_space:
             f = a + h + d
             g = self.agents[index].genome
             self.store_genome(g, f)
-            self.add_previous_agent(g, a)
+            self.add_previous_agent(g, f)
             self.deaths += 1
             affected = self.get_adjacent_agent_indices(index)
             for i in affected:
-                self.agents[i].happiness -= 10
+                self.agents[i].happiness -= 5
             if self.visuals == True:
                 self.agents[index].entity.disable()
                 del(self.agents[index].entity)
@@ -866,7 +877,7 @@ class game_space:
         ypos = self.agents[index].ypos
         fi, val = self.get_nearest_food(xpos, ypos)
         if val <= 1:
-            self.agents[index].happiness += 5
+            self.agents[index].happiness += 20
             self.food_picked += 1
             self.agents[index].food_inventory += 1
             self.food[fi].energy -= 2
@@ -880,7 +891,7 @@ class game_space:
                 self.agents[index].happiness -= 5
             else:
                 self.agents[index].energy += 20
-                self.agents[index].happiness += 20
+                self.agents[index].happiness += 100
             self.agents[index].food_inventory -= 1
 
     def action_plant_food(self, index):
@@ -969,6 +980,9 @@ class game_space:
 
     def get_food_inventory(self, index):
         return self.agents[index].food_inventory
+
+    def get_distance_moved(self, index):
+        return self.agents[index].distance_travelled * 0.1
 
     def get_own_happiness(self, index):
         return self.agents[index].happiness * 0.1
@@ -1244,14 +1258,14 @@ class game_space:
             new_genomes.append(gm)
         return new_genomes
 
-    def add_previous_agent(self, genome, age):
+    def add_previous_agent(self, genome, fitness):
         if len(self.previous_agents) >= 100:
             self.previous_agents.popleft()
-        self.previous_agents.append([genome, age])
+        self.previous_agents.append([genome, fitness])
 
     def get_best_previous_agents(self, num):
-        ages = [x[1] for x in self.previous_agents]
-        indices = np.argpartition(ages,-num)[-num:]
+        fitness = [x[1] for x in self.previous_agents]
+        indices = np.argpartition(fitness,-num)[-num:]
         genomes = [self.previous_agents[i][0] for i in indices]
         return genomes
 
@@ -1303,7 +1317,7 @@ class game_space:
         mtemp = int(np.mean([x.temperature for x in self.agents]))
         vrange = self.agent_view_distance
         gsitems = len(self.genome_store)
-        mpa = np.mean([x[1] for x in self.previous_agents])
+        mpf = np.mean([x[1] for x in self.previous_agents])
         gf = [x[0] for x in self.genome_store]
         gsmea = 0
         gsmax = 0
@@ -1327,7 +1341,7 @@ class game_space:
         msg += " mean d: " + "%.2f"%mean_d
         msg += " max d: " + "%.2f"%max_d + "\n"
         msg += "\n"
-        msg += "Previous agent mean age: " + "%.2f"%mpa + "\n"
+        msg += "Previous agent mean fitness: " + "%.2f"%mpf + "\n"
         msg += "\n"
         msg += "Food: " + str(num_food) + " energy: " + str(food_energy) + "\n"
         msg += "\n"
@@ -1344,15 +1358,14 @@ class game_space:
         msg += "Items in genome store: " + str(gsitems) 
         msg += " mean fitness: " + "%.2f"%gsmea + " max fitness: " + "%.2f"%gsmax + "\n"
         msg += "\n"
-        for x, c in self.agent_actions.items():
-            msg += str(x) + ": " + str(c) + "\n"
+        ta = sum([self.agent_actions[x] for x in self.actions])
+        bars = [int(400*(self.agent_actions[x]/ta)) for x in self.actions]
+        for i, x in enumerate(self.actions):
+            space = (15-len(x))*" "
+            bar = bars[i]*"#"
+            msg += str(x) + ":" + space + bar + "\n"
         msg += "\n"
         return msg
-
-    def print_actions(self):
-        total_actions = sum([c for x, c in self.agent_actions.items()])
-        num_actions = len(self.agent_actions.items())
-        # XXX histogram XXX
 
     def print_stats(self):
         os.system('clear')
