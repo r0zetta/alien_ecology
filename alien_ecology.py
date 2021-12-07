@@ -763,6 +763,8 @@ class game_space:
         xv, yv = self.get_viewpoint(index)
         predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
         predator_count = len(predators)
+        if predator_count > 0:
+            self.agents[index].happiness -= 1
         return predator_count
 
     def predator_move_random(self, index):
@@ -903,7 +905,7 @@ class game_space:
             ypos = self.agents[index].ypos
             if random.random() <= self.food_plant_success:
                 self.plant_food(xpos, ypos)
-                self.agents[index].happiness += 20
+                self.agents[index].happiness += 5
         else:
             self.agents[index].happiness -= 1
 
