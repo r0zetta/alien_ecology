@@ -196,8 +196,8 @@ class Agent:
         self.fitness = 0
         self.age = 0
         self.temperature = 20
-        self.inertial_damping = 0.90
-        self.speed = 0.5
+        self.inertial_damping = 0.80
+        self.speed = 0.4
         self.previous_states = deque()
 
     def get_action(self):
@@ -224,13 +224,13 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[16],
+                 hidden_size=[32, 32],
                  num_prev_states=1,
-                 learners=0.5,
+                 learners=0.50,
                  mutation_rate=0.001,
-                 area_size=50,
-                 year_length=100,
-                 day_length=10,
+                 area_size=100,
+                 year_length=120*300,
+                 day_length=120,
                  num_agents=100,
                  agent_start_energy=200,
                  agent_max_inventory=10,
@@ -241,7 +241,7 @@ class game_space:
                  food_spawns=10,
                  food_dist=5,
                  food_repro_energy=15,
-                 food_start_energy=10,
+                 food_start_energy=5,
                  food_energy_growth=0.1,
                  food_plant_success=1,
                  pheromone_decay=0.90,
@@ -327,6 +327,7 @@ class game_space:
                              "environment_temperature",
                              "visibility",
                              "age_oscillator_fast",
+                             "reproduction_oscillator",
                              "age_oscillator_med",
                              "age_oscillator_slow",
                              "step_oscillator_fast",
@@ -640,7 +641,7 @@ class game_space:
 # Agent runtime routines
 ########################
     def record_recent_actions(self, action):
-        if len(self.recent_actions) > 10000:
+        if len(self.recent_actions) > 1000:
             self.recent_actions.popleft()
         self.recent_actions.append(action)
         ra = Counter()
@@ -1171,6 +1172,9 @@ class game_space:
     def get_age_oscillator_fast(self, index):
         return np.sin(self.agents[index].age)
 
+    def get_reproduction_oscillator(self, index):
+        return np.sin((self.agents[index].age+(self.min_reproduction_age/2))/self.min_reproduction_age)
+
     def get_age_oscillator_med(self, index):
         return np.sin(self.agents[index].age/self.day_length)
 
@@ -1335,14 +1339,16 @@ class game_space:
         if self.environment_temperature < 5:
             growth = -1.2 * growth
         if self.environment_temperature > 35:
-            growth = (random.random()-(0.2*(self.environment_temperature-35))) * growth
+            growth = -1.2 * growth
         dead = []
         for index, f in enumerate(self.food):
             self.food[index].energy += growth
             if self.food[index].energy >= self.food_repro_energy:
-                if len(self.food) < 0.02*(self.area_size**2):
+                if len(self.food) < 0.007*(self.area_size**2):
                     self.spawn_new_food(self.food[index].xpos, self.food[index].ypos)
                     self.food[index].energy = self.food_start_energy
+                else:
+                    self.food[index].energy = self.food_repro_energy
             if self.food[index].energy <= 0:
                 dead.append(index)
         if len(dead) > 0:
@@ -1548,7 +1554,7 @@ def update():
     # Change background to reflect season and time of day
     tod = gs.agent_view_distance # 1-5
     tod = (tod+2)*0.1
-    osc = np.sin(self.steps/self.year_length)
+    osc = np.sin(gs.steps/gs.year_length)
     season = int(2 + (osc*2))
     c1 = int(100*tod)
     c2 = int(50*tod)
