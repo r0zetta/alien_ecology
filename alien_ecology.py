@@ -226,7 +226,7 @@ class game_space:
     def __init__(self,
                  hidden_size=[16],
                  num_prev_states=1,
-                 learners=True,
+                 learners=0.5,
                  mutation_rate=0.001,
                  area_size=50,
                  year_length=100,
@@ -349,10 +349,13 @@ class game_space:
         self.previous_agents = deque()
         self.create_starting_food()
         self.create_genomes()
-        if self.learners == True:
-            self.create_new_learner_agents()
-        else:
-            self.create_new_evolvable_agents(use_pool=True)
+        self.agents = []
+        num_learners = int(self.num_agents * self.learners)
+        num_evolvable = int(self.num_agents - num_learners)
+        if num_learners > 0:
+            self.create_new_learner_agents(num_learners)
+        if num_evolvable > 0:
+            self.create_new_evolvable_agents(num_evolvable)
         self.create_predators()
 
     def step(self):
@@ -491,25 +494,15 @@ class game_space:
         if self.visuals == True:
             self.set_agent_entity(index)
 
-    def create_new_evolvable_agents(self, use_pool=False):
-        self.agents = []
-        if use_pool == True:
-            for genome in self.genome_pool:
-                self.spawn_evolving_agent(genome)
-        else:
-            for n in range(self.num_agents):
-                genome = self.make_random_genome()
-                self.spawn_evolving_agent(genome)
+    def create_new_evolvable_agents(self, num):
+        genomes = random.sample(self.genome_pool, num)
+        for genome in genomes:
+            self.spawn_evolving_agent(genome)
 
-    def create_new_learner_agents(self, use_pool=False):
-        self.agents = []
-        if use_pool == True:
-            for genome in self.genome_pool:
-                self.spawn_learning_agent(genome)
-        else:
-            for n in range(self.num_agents):
-                genome = self.make_random_genome()
-                self.spawn_learning_agent(genome)
+    def create_new_learner_agents(self, num):
+        genomes = random.sample(self.genome_pool, num)
+        for genome in genomes:
+            self.spawn_learning_agent(genome)
 
     def set_food_entity(self, index):
         xabs = self.food[index].xpos
