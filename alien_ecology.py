@@ -1037,10 +1037,10 @@ class game_space:
     def action_eat_food(self, index):
         reward = 0
         if self.agents[index].food_inventory > 0:
-            self.food_eaten += 1
             if self.agents[index].energy >= self.agent_start_energy:
                 self.agents[index].happiness -= 5
             else:
+                self.food_eaten += 1
                 self.agents[index].energy += 20
                 self.agents[index].happiness += 100
                 reward = 1
@@ -1052,14 +1052,17 @@ class game_space:
     def action_plant_food(self, index):
         reward = 0
         if self.agents[index].food_inventory > 0:
-            self.food_planted += 1
-            self.agents[index].food_inventory -= 1
             xpos = self.agents[index].xpos
             ypos = self.agents[index].ypos
             if random.random() <= self.food_plant_success:
-                self.plant_food(xpos, ypos)
-                self.agents[index].happiness += 5
-                reward = 1
+                success = self.plant_food(xpos, ypos)
+                if success == True:
+                    self.food_planted += 1
+                    self.agents[index].food_inventory -= 1
+                    self.agents[index].happiness += 5
+                    reward = 1
+                else:
+                    self.agents[index].happiness -= 1
         else:
             self.agents[index].happiness -= 1
         return reward
@@ -1361,6 +1364,11 @@ class game_space:
             self.create_starting_food()
 
     def plant_food(self, xpos, ypos):
+        for i in range(len(self.food)):
+            fx = self.food[i].xpos
+            fy = self.food[i].xpos
+            if xpos == fx and ypos == fy:
+                return False
         z = -1
         x = xpos
         y = ypos
@@ -1369,6 +1377,7 @@ class game_space:
         if self.visuals == True:
             fi = len(self.food)-1
             self.set_food_entity(fi)
+        return True
 
     def spawn_new_food(self, xpos, ypos):
         z = -1
