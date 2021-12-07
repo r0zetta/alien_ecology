@@ -1026,7 +1026,7 @@ class game_space:
             self.agents[index].happiness += 20
             self.food_picked += 1
             self.agents[index].food_inventory += 1
-            self.food[fi].energy -= 2
+            self.food[fi].energy -= 5
             if self.food[fi].energy < 0:
                 self.remove_food(fi)
             reward = 1
