@@ -1,47 +1,127 @@
 from ursina import *
-import random, sys, time, os, json, re, pickle, operator, math
+import random, sys, time, os, pickle, math
 import numpy as np
 from collections import Counter, deque
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.autograd import Variable
-from torch.distributions import Categorical
-from scipy.spatial import distance
 
 class Net(nn.Module):
-    def __init__(self, weights):
+    def __init__(self, w, l):
         super(Net, self).__init__()
+        self.w = w
+        self.l = l
         self.fc_layers = []
-        for item in weights:
+        for item in self.w:
             s1, s2, d = item
             fc = nn.Linear(s1, s2, bias=False)
             fc.weight_data = d
             self.fc_layers.append(fc)
 
     def forward(self, x):
-        for i, fc in enumerate(self.fc_layers):
-            if i < len(self.fc_layers):
-                x = F.relu(fc(x))
+        for i in range(len(self.fc_layers)):
+            if i+1 < len(self.fc_layers):
+                x = F.relu(self.fc_layers[i](x))
             else:
-                x = F.softmax(F.relu(fc(x)))
+                x = F.softmax(F.relu(self.fc_layers[i](x)))
         return x
 
+    def get_w(self):
+        w = []
+        for fc in self.fc_layers:
+            d = fc.weight_data.detach().numpy()
+            d = list(np.ravel(d))
+            w.extend(d)
+        return w
+
     def get_action(self, state):
-        with torch.no_grad():
-            state = state.float()
-            ret = self.forward(Variable(state))
-            action = torch.argmax(ret)
-            return action
+        if self.l == True:
+            num_actions = self.w[-1][0]
+            probs = self.forward(state)
+            action = np.random.choice(num_actions, p=np.squeeze(probs.detach().numpy()))
+            log_prob = torch.log(probs.squeeze(0)[action])
+            return action, log_prob
+        else:
+            with torch.no_grad():
+                ret = self.forward(state)
+                action = torch.argmax(ret)
+                return action
 
 class GN_model:
-    def __init__(self, weights):
-        self.policy = Net(weights)
+    def __init__(self, w, l=False):
+        self.l = l
+        self.w = w
+        self.policy = Net(self.w, self.l)
+        if self.l == True:
+            self.optimizer = optim.Adam(params = self.policy.parameters(), lr=3e-4)
+            self.reset()
+
+    def num_params(self):
+        print(sum([param.nelement() for param in self.policy.parameters()]))
+
+    def print_w(self):
+        for item in self.w:
+            print(item[0], item[1], np.array(item[2]).shape)
+
+    def get_w(self):
+        return self.policy.get_w()
 
     def get_action(self, state):
-        action = self.policy.get_action(state)
-        return action
+        if self.l == True:
+            action, log_prob = self.policy.get_action(state)
+            self.log_probs.append(log_prob)
+            return action
+        else:
+            action = self.policy.get_action(state)
+            return action
+
+    def reset(self):
+        self.rewards = []
+        self.log_probs = []
+
+    def record_reward(self, reward):
+        self.rewards.append(reward)
+
+    def update_policy(self):
+        discounted_rewards = []
+        GAMMA = 0.9
+        for t in range(len(self.rewards)):
+            Gt = 0 
+            pw = 0
+            for r in self.rewards[t:]:
+                Gt = Gt + GAMMA**pw * r
+                pw = pw + 1
+            discounted_rewards.append(Gt)
+
+        discounted_rewards = torch.tensor(discounted_rewards)
+        discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / (discounted_rewards.std() + 1e-9)
+
+        policy_gradient = []
+        for log_prob, Gt in zip(self.log_probs, discounted_rewards):
+            policy_gradient.append(-log_prob * Gt)
+
+        self.optimizer.zero_grad()
+        policy_gradient = torch.stack(policy_gradient).sum()
+        policy_gradient.backward()
+        self.optimizer.step()
+        self.reset()
+
+    def save_model(self, dirname, index):
+        filename = os.path.join(dirname, "policy_model_" + "%02d"%index + ".pt")
+        torch.save({ "policy_state_dict": self.policy.state_dict(),
+                     "policy_hidden": self.policy_hidden,
+                   }, filename)
+
+    def load_model(self, dirname, index):
+        filename = os.path.join(dirname, "policy_model_" + "%02d"%index + ".pt")
+        if os.path.exists(filename):
+            checkpoint = torch.load(filename)
+            self.policy.load_state_dict(checkpoint['policy_state_dict'])
+            self.policy_hidden = checkpoint["policy_hidden"]
+            return True
+        return False
+
 
 # Actions:
 # increase/decrease oscillator[n] period
@@ -63,34 +143,20 @@ class Predator:
         self.inertial_damping = 0.70
 
 class Agent:
-    def __init__(self, x, y, z, color, energy, state_size, action_size, hidden_size, genome):
+    def __init__(self, x, y, z, learnable, color, energy,
+                 state_size, action_size, hidden_size, genome):
         self.colors = ["blue", "green", "orange", "purple", "red", "teal", "violet", "yellow"]
+        self.start_energy = energy
         self.state_size = state_size
         self.action_size = action_size
         self.hidden_size = hidden_size
-        self.previous_states = deque()
+        self.learnable = learnable
         self.sample = False
         self.xpos = x
         self.ypos = y
         self.zpos = z
-        self.xvel = 0
-        self.yvel = 0
-        self.prev_action = 0
-        self.orient = 0 # 0-7 in 45 degree increments
-        self.energy = energy
-        self.food_inventory = 0
-        self.distance_travelled = 0
-        self.happiness = 0
-        self.fitness = 0
-        self.age = 0
-        self.temperature = 20
-        self.inertial_damping = 0.90
-        self.speed = 0.5
         self.color = color
         self.color_str = self.colors[color]
-        #self.inertial_damping = random.uniform(0.7, 0.99)
-        #self.speed = random.uniform(0.3, 0.7)
-        #self.color = random.choice(self.colors)
         self.genome = genome
         weights = []
         m1 = 0
@@ -107,11 +173,26 @@ class Agent:
                     weights.append([self.hidden_size[i], self.hidden_size[i+1], w])
         w = torch.Tensor(np.reshape(genome[m2:], (action_size, hidden_size[-1])))
         weights.append([self.hidden_size[-1], self.action_size, w])
-        self.model = GN_model(weights)
+        self.model = GN_model(weights, self.learnable)
         self.state = None
-        self.episode_steps = 0
-        self.last_success = None
         self.entity = None
+        self.reset()
+
+    def reset(self):
+        self.energy = self.start_energy
+        self.xvel = 0
+        self.yvel = 0
+        self.prev_action = 0
+        self.orient = 0 # 0-7 in 45 degree increments
+        self.food_inventory = 0
+        self.distance_travelled = 0
+        self.happiness = 0
+        self.fitness = 0
+        self.age = 0
+        self.temperature = 20
+        self.inertial_damping = 0.90
+        self.speed = 0.5
+        self.previous_states = deque()
 
     def get_action(self):
         if self.sample == True:
@@ -158,7 +239,7 @@ class game_space:
                  food_plant_success=1,
                  pheromone_decay=0.90,
                  min_reproduction_age=50,
-                 min_reproduction_energy=150,
+                 min_reproduction_energy=140,
                  reproduction_cost=0,
                  agent_view_distance=5,
                  visuals=True,
@@ -376,9 +457,11 @@ class game_space:
         xpos = random.random()*self.area_size
         ypos = random.random()*self.area_size
         zpos = -1
+        learnable = False
         a = Agent(xpos,
                   ypos,
                   zpos,
+                  learnable,
                   0,
                   self.agent_start_energy,
                   self.state_size,
@@ -559,8 +642,8 @@ class game_space:
         xpos = self.agents[index1].xpos
         ypos = self.agents[index2].ypos
         zpos = -1
-        g1 = self.agents[index1].genome
-        g2 = self.agents[index2].genome
+        g1 = self.agents[index1].model.get_w()
+        g2 = self.agents[index2].model.get_w()
         s = self.reproduce_genome(g1, g2, 1)
         c = random.choice(s)
         genome = self.mutate_genome(c, 1)[0]
@@ -572,6 +655,7 @@ class game_space:
         a = Agent(xpos,
                   ypos,
                   zpos,
+                  False,
                   color,
                   self.agent_start_energy,
                   self.state_size,
@@ -666,6 +750,16 @@ class game_space:
         else:
             return None, None
 
+    def reset_agents(self, reset):
+        for index in reset:
+            self.deaths += 1
+            affected = self.get_adjacent_agent_indices(index)
+            for i in affected:
+                self.agents[i].happiness -= 5
+            self.agents[index].model.update_policy()
+            self.agents[index].reset()
+            self.set_initial_agent_state(index)
+
     def kill_agents(self, dead):
         for index in dead:
             a = self.agents[index].age
@@ -703,6 +797,7 @@ class game_space:
         # - happiness
         # Decrease energy and remove if the agent is dead
         dead = set()
+        reset = set()
         for index in range(len(self.agents)):
             self.agents[index].age += 1
             self.set_agent_temperature(index)
@@ -716,7 +811,12 @@ class game_space:
                 self.agents[index].happiness -= 1
             self.agents[index].energy -= energy_drain
             if self.agents[index].energy <= 0:
-                dead.add(index)
+                if self.agents[index].learnable == False:
+                    dead.add(index)
+                else:
+                    reset.add(index)
+        if len(reset) > 0:
+            self.reset_agents(reset)
         if len(dead) > 0:
             self.kill_agents(dead)
 
@@ -843,20 +943,24 @@ class game_space:
         self.agents[index].prev_action = action
         agent_function = "action_" + self.actions[action]
         class_method = getattr(self, agent_function)
-        return class_method(index)
+        reward = class_method(index)
+        if self.agents[index].learnable == True:
+            self.agents[index].model.record_reward(reward)
 
     def action_null(self, index):
-        return
+        return 0
 
     def action_rotate_right(self, index):
         self.agents[index].orient += 1
         if self.agents[index].orient > 7:
             self.agents[index].orient = 0
+        return 0
 
     def action_rotate_left(self, index):
         self.agents[index].orient -= 1
         if self.agents[index].orient < 0:
             self.agents[index].orient = 7
+        return 0
 
     def action_propel(self, index):
         orient = self.agents[index].orient
@@ -866,12 +970,14 @@ class game_space:
         xv, yv = self.propel(xvel, yvel, orient, speed)
         self.agents[index].xvel = xv
         self.agents[index].yvel = yv
+        return 0
 
     def action_pick_food(self, index):
         carrying = self.agents[index].food_inventory
         if carrying >= self.agent_max_inventory:
             self.agents[index].happiness -= 5
-            return
+            return 0
+        reward = 0
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
         fi, val = self.get_nearest_food(xpos, ypos)
@@ -882,10 +988,13 @@ class game_space:
             self.food[fi].energy -= 2
             if self.food[fi].energy < 0:
                 self.remove_food(fi)
+            reward = 1
         else:
             self.agents[index].happiness -= 1
+        return reward
 
     def action_eat_food(self, index):
+        reward = 0
         if self.agents[index].food_inventory > 0:
             self.food_eaten += 1
             if self.agents[index].energy >= self.agent_start_energy:
@@ -893,11 +1002,14 @@ class game_space:
             else:
                 self.agents[index].energy += 20
                 self.agents[index].happiness += 100
+                reward = 1
             self.agents[index].food_inventory -= 1
         else:
             self.agents[index].happiness -= 1
+        return reward
 
     def action_plant_food(self, index):
+        reward = 0
         if self.agents[index].food_inventory > 0:
             self.food_planted += 1
             self.agents[index].food_inventory -= 1
@@ -906,8 +1018,10 @@ class game_space:
             if random.random() <= self.food_plant_success:
                 self.plant_food(xpos, ypos)
                 self.agents[index].happiness += 5
+                reward = 1
         else:
             self.agents[index].happiness -= 1
+        return reward
 
     def action_mate(self, index):
         if self.agents[index].energy >= self.min_reproduction_energy:
@@ -922,9 +1036,9 @@ class game_space:
                                 self.agents[ai].happiness += 100
                                 self.agents[index].energy -= self.reproduction_cost
                                 self.agents[ai].energy -= self.reproduction_cost
-                                return
+                                return 1
         self.agents[index].happiness -= 1
-        return
+        return 0
 
     def action_emit_pheromone(self, index):
         xpos = self.agents[index].xpos
