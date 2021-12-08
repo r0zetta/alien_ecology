@@ -1486,18 +1486,26 @@ class game_space:
     def get_best_previous_agents(self, num):
         fitness = [x[1] for x in self.previous_agents]
         indices = np.argpartition(fitness,-num)[-num:]
+        return indices
+
+    def get_best_previous_genomes(self, num):
+        indices = self.get_best_previous_agents(num)
         genomes = [self.previous_agents[i][0] for i in indices]
         return genomes
 
     def make_genome_from_previous(self):
         if len(self.previous_agents) < 10:
             return self.make_random_genome()
-        genomes = self.get_best_previous_agents(10)
+        genomes = self.get_best_previous_genomes(10)
         return self.make_new_offspring(genomes)
 
-    def get_best_genomes_from_store(self, num):
+    def get_best_agents_from_store(self, num):
         fitness = [x[1] for x in self.genome_store]
         indices = np.argpartition(fitness,-num)[-num:]
+        return indices
+
+    def get_best_genomes_from_store(self, num):
+        indices = self.get_best_agents_from_store(num)
         genomes = [self.genome_store[i][0] for i in indices]
         return genomes
 
@@ -1588,6 +1596,18 @@ class game_space:
         vrange = self.agent_view_distance
         gsitems = len(self.genome_store)
         mpf = np.mean([x[1] for x in self.previous_agents])
+        bpal = 0
+        bpae = 0
+        if len(self.previous_agents) > 10:
+            bpi = self.get_best_previous_agents(10)
+            bpal = sum([self.previous_agents[i][5] for i in bpi])
+            bpae = 10 - bpal
+        gsal = 0
+        gsae = 0
+        if len(self.genome_store) > 10:
+            gsi = self.get_best_agents_from_store(10)
+            gsal = sum([self.genome_store[i][5] for i in gsi])
+            gsae = 10 - gsal
 
         msg = ""
         msg += "Starting agents: " + str(self.num_agents)
@@ -1637,6 +1657,12 @@ class game_space:
         msg += "  max distance moved: " + "%.2f"%max_d
         msg += "\n\n"
         msg += self.make_labels(self.previous_agents, "Previous ")
+        msg += "Top 10 previous agents: learning: " + str(bpal)
+        msg += "  evolving: " + str(bpae)
+        msg += "\n"
+        msg += "Top 10 agents in genome store: learning: " + str(gsal)
+        msg += "  evolving: " + str(gsae)
+        msg += "\n\n"
         msg += "Items in genome store: " + str(gsitems)
         msg += "\n"
         msg += self.make_labels(self.genome_store, "Genome store ")
@@ -1647,6 +1673,10 @@ class game_space:
     def print_stats(self):
         os.system('clear')
         print(gs.get_stats())
+
+# Stuff to record:
+# mean stats (age, fitness, etc.) of previous agents
+# balance of learning/evolving in genome store and previous agents
 
 # update callback for ursina
 def update():
