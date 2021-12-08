@@ -50,8 +50,9 @@ class Net(nn.Module):
             return action, log_prob
         else:
             with torch.no_grad():
-                ret = self.forward(state)
-                action = torch.argmax(ret)
+                num_actions = self.w[-1][1]
+                probs = self.forward(state)
+                action = np.random.choice(num_actions, p=np.squeeze(probs.detach().numpy()))
                 return action
 
 class GN_model:
