@@ -269,7 +269,7 @@ class game_space:
                  food_plant_success=0.2,
                  pheromone_decay=0.95,
                  min_reproduction_age=50,
-                 min_reproduction_energy=100,
+                 min_reproduction_energy=80,
                  reproduction_cost=0,
                  agent_view_distance=5,
                  visuals=True,
@@ -410,6 +410,9 @@ class game_space:
 # - measure effect of GA on training
 # - if GA has a neutral of positive effect, this shows that most of the agents
 # configure their parameters in a similar way
+# - GA-assisted learning - set learners to 1.0
+# ill-performing agents will be evolved from well-performing agents
+# mating mechanism also introduces evolving agents into the mix
 # - how about flaggelae instead of turn and move?
 # - longer flaggelae mean more inertial damping, but greater "visibility"
 # - record age, happiness, distance, etc. in previous and stored
@@ -1577,6 +1580,8 @@ class game_space:
 
     def get_stats(self):
         num_agents = len(self.agents)
+        l_agents = sum([x.learnable for x in self.agents])
+        e_agents = num_agents - l_agents
         agent_energy = int(sum([x.energy for x in self.agents]))
         num_food = len(self.food)
         food_energy = int(sum([x.energy for x in self.food]))
@@ -1636,7 +1641,10 @@ class game_space:
         msg += "  genome size: " + str(self.genome_size)
         msg += "\n"
         msg += "Food: " + str(num_food) + "  energy: " + str(food_energy)
-        msg += "  agents: " + str(num_agents) + " energy: " + str(agent_energy)
+        msg += "\n"
+        msg += "Agents: " + str(num_agents)
+        msg += "  learning: " + str(l_agents)
+        msg += "  evolving: " + str(e_agents)
         msg += "\n\n"
         msg += "Spawns: " + str(self.spawns)
         msg += "  resets: " + str(self.resets)
