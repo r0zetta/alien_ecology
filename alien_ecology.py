@@ -35,6 +35,12 @@ class Net(nn.Module):
             w.extend(d)
         return w
 
+    def set_w(self, w):
+        self.w = w
+        for i, item in enumerate(self.w):
+            s1, s2, d = item
+            self.fc_layers[i].weight_data = d
+
     def get_action(self, state):
         if self.l == True:
             num_actions = self.w[-1][1]
@@ -66,6 +72,9 @@ class GN_model:
 
     def get_w(self):
         return self.policy.get_w()
+
+    def set_w(self, w):
+        return self.policy.set_w(w)
 
     def get_action(self, state):
         if self.l == True:
@@ -164,25 +173,37 @@ class Agent:
         self.color = color
         self.color_str = self.colors[color]
         self.genome = genome
-        self.weights = []
+        self.weights = self.make_weights()
+        self.model = GN_model(self.weights, self.learnable)
+        self.state = None
+        self.entity = None
+        self.previous_fitness = []
+        self.reset()
+
+    def make_weights(self):
+        weights = []
         m1 = 0
         m2 = self.state_size * self.hidden_size[0]
-        w = torch.Tensor(np.reshape(genome[m1:m2], (self.hidden_size[0], self.state_size)))
-        self.weights.append([self.state_size, self.hidden_size[0], w])
+        w = torch.Tensor(np.reshape(self.genome[m1:m2], (self.hidden_size[0], self.state_size)))
+        weights.append([self.state_size, self.hidden_size[0], w])
         if len(self.hidden_size) > 1:
             for i in range(len(self.hidden_size)):
                 if i+1 < len(self.hidden_size):
                     m1 = m2
                     m2 = m1 + (self.hidden_size[i] * self.hidden_size[i+1])
-                    w = torch.Tensor(np.reshape(genome[m1:m2],
+                    w = torch.Tensor(np.reshape(self.genome[m1:m2],
                                      (self.hidden_size[i], self.hidden_size[i+1])))
-                    self.weights.append([self.hidden_size[i], self.hidden_size[i+1], w])
-        w = torch.Tensor(np.reshape(genome[m2:], (action_size, hidden_size[-1])))
-        self.weights.append([self.hidden_size[-1], self.action_size, w])
-        self.model = GN_model(self.weights, self.learnable)
-        self.state = None
-        self.entity = None
-        self.reset()
+                    weights.append([self.hidden_size[i], self.hidden_size[i+1], w])
+        w = torch.Tensor(np.reshape(self.genome[m2:], (self.action_size, self.hidden_size[-1])))
+        weights.append([self.hidden_size[-1], self.action_size, w])
+        return weights
+
+    def set_genome(self, genome):
+        self.genome = genome
+
+    def set_w(self):
+        self.weights = self.make_weights()
+        self.model.set_w(self.weights)
 
     def reset(self):
         self.energy = self.start_energy
@@ -237,9 +258,9 @@ class game_space:
                  num_predators=5,
                  predator_view_distance=5,
                  predator_kill_distance=2,
-                 food_sources=40,
+                 food_sources=30,
                  food_spawns=10,
-                 food_dist=5,
+                 food_dist=7,
                  food_repro_energy=15,
                  food_start_energy=5,
                  food_energy_growth=0.1,
@@ -382,6 +403,10 @@ class game_space:
 
 
 # To do:
+# - implement set_w for learning agents
+#  - record learning agent age
+#  - if rolling mean age is low, replace weights with a sample from genome store
+#  - agent set_genome and then set_w
 # - add predators, both moving and stationary
 # - queens?
 # - add climate change, both periodic and from balance of plants and organisms
@@ -790,6 +815,10 @@ class game_space:
             self.agents[index].xpos = random.random()*self.area_size
             self.agents[index].ypos = random.random()*self.area_size
             self.set_initial_agent_state(index)
+            self.agents[index].previous_fitness.append(f)
+            # Get mean fitness over last n runs
+            # If it is low, get a genome from store
+            # Replace agent's genome and weights
 
     def kill_agents(self, dead):
         for index in dead:
@@ -1022,16 +1051,17 @@ class game_space:
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
         fi, val = self.get_nearest_food(xpos, ypos)
-        if val <= 1:
-            self.agents[index].happiness += 20
-            self.food_picked += 1
-            self.agents[index].food_inventory += 1
-            self.food[fi].energy -= 5
-            if self.food[fi].energy < 0:
-                self.remove_food(fi)
-            reward = 1
-        else:
-            self.agents[index].happiness -= 1
+        if fi is not None:
+            if val <= 1:
+                self.agents[index].happiness += 20
+                self.food_picked += 1
+                self.agents[index].food_inventory += 1
+                self.food[fi].energy -= 5
+                if self.food[fi].energy < 0:
+                    self.remove_food(fi)
+                reward = 1
+            else:
+                self.agents[index].happiness -= 1
         return reward
 
     def action_eat_food(self, index):
@@ -1247,6 +1277,7 @@ class game_space:
             self.set_pheromone_entity(index)
 
     def get_pheromones_in_radius(self, xpos, ypos, radius):
+        radius = radius * 2
         ret = []
         for i in range(len(self.pheromones)):
             ax = self.pheromones[i].xpos
@@ -1266,20 +1297,6 @@ class game_space:
         ypos = self.agents[index].ypos
         pheromones = self.get_pheromones_in_radius(xpos, ypos, self.agent_view_distance)
         return(len(pheromones))
-
-    def get_nearest_pheromone(self, xpos, ypos):
-        distances = []
-        for f in self.pheromones:
-            ax = f.xpos
-            ay = f.ypos
-            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
-                distances.append(self.distance(xpos, ypos, ax, ay))
-        if len(distances) > 0:
-            shortest_index = np.argmin(distances)
-            shortest_value = distances[shortest_index]
-            return shortest_index, shortest_value
-        else:
-            return None, None
 
 
 #######################
@@ -1363,21 +1380,24 @@ class game_space:
         if len(self.food) < 1:
             self.create_starting_food()
 
-    def plant_food(self, xpos, ypos):
+    def is_food_on_this_plot(self, xpos, ypos):
         for i in range(len(self.food)):
-            fx = self.food[i].xpos
-            fy = self.food[i].xpos
-            if xpos == fx and ypos == fy:
-                return False
+            fx = int(self.food[i].xpos)
+            fy = int(self.food[i].xpos)
+            if xpos == int(fx) and ypos == int(fy):
+                return True
+        return False
+
+    def plant_food(self, xpos, ypos):
         z = -1
-        x = xpos
-        y = ypos
-        f = Food(x, y, z, self.food_start_energy)
-        self.food.append(f)
-        if self.visuals == True:
-            fi = len(self.food)-1
-            self.set_food_entity(fi)
-        return True
+        if self.is_food_on_this_plot(xpos, ypos) == False:
+            f = Food(xpos, ypos, z, self.food_start_energy)
+            self.food.append(f)
+            if self.visuals == True:
+                fi = len(self.food)-1
+                self.set_food_entity(fi)
+            return True
+        return False
 
     def spawn_new_food(self, xpos, ypos):
         z = -1
@@ -1392,10 +1412,11 @@ class game_space:
         if y > self.area_size:
             y -= self.area_size
         f = Food(x, y, z, self.food_start_energy)
-        self.food.append(f)
-        if self.visuals == True:
-            fi = len(self.food)-1
-            self.set_food_entity(fi)
+        if self.is_food_on_this_plot(x, y) == False:
+            self.food.append(f)
+            if self.visuals == True:
+                fi = len(self.food)-1
+                self.set_food_entity(fi)
 
 ########################################
 # Routines related to genetic algorithms
