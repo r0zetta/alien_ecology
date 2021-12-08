@@ -200,6 +200,7 @@ class Agent:
 
     def set_genome(self, genome):
         self.genome = genome
+        self.set_w()
 
     def set_w(self):
         self.weights = self.make_weights()
@@ -392,10 +393,6 @@ class game_space:
         self.update_agent_status()
         self.update_pheromone_status()
         self.reproduce_food()
-        if self.steps % 500 == 0:
-            if len(self.genome_store) >= 100:
-                ngs = random.sample(self.genome_store, 75)
-                self.genome_store = ngs
         if self.save_stuff == True:
             if self.steps % 20 == 0:
                 self.save_genomes()
@@ -403,6 +400,7 @@ class game_space:
 
 
 # To do:
+# - record age, happiness, distance, etc. in previous and stored
 # - implement set_w for learning agents
 #  - record learning agent age
 #  - if rolling mean age is low, replace weights with a sample from genome store
@@ -459,7 +457,7 @@ class game_space:
             self.load_genomes()
             sg = []
             for item in self.genome_store:
-                a, g = item
+                g, f = item
                 sg.append(g)
             if len(sg) > self.num_agents:
                 self.genome_pool = random.sample(sg, self.num_agents)
@@ -796,6 +794,19 @@ class game_space:
         else:
             return None, None
 
+    def replace_learner_genome(self, index):
+        if len(self.agents[index].previous_fitness) >= 50:
+            if len(self.genome_store) >= 50:
+                mpf = np.mean(self.agents[index].previous_fitness)
+                self.agents[index].previous_fitness = []
+                gf = [x[1] for x in self.genome_store]
+                gsmea = np.mean(gf)
+                if gsmea > 0:
+                    if mpf < gsmean * 0.75:
+                        s = self.get_best_genomes_from_store(10)
+                        g = random.choice(s)
+                        self.agents[index].set_genome(g)
+
     def reset_agents(self, reset):
         for index in reset:
             a = self.agents[index].age
@@ -805,6 +816,8 @@ class game_space:
             g = self.agents[index].model.get_w()
             self.store_genome(g, f)
             self.add_previous_agent(g, f)
+            self.agents[index].previous_fitness.append(f)
+            self.replace_learner_genome(index)
             self.deaths += 1
             self.resets += 1
             affected = self.get_adjacent_agent_indices(index)
@@ -815,10 +828,6 @@ class game_space:
             self.agents[index].xpos = random.random()*self.area_size
             self.agents[index].ypos = random.random()*self.area_size
             self.set_initial_agent_state(index)
-            self.agents[index].previous_fitness.append(f)
-            # Get mean fitness over last n runs
-            # If it is low, get a genome from store
-            # Replace agent's genome and weights
 
     def kill_agents(self, dead):
         for index in dead:
@@ -1465,15 +1474,24 @@ class game_space:
         genomes = [self.previous_agents[i][0] for i in indices]
         return genomes
 
-    def make_genome_from_previous(self):
-        if len(self.previous_agents) < 10:
-            return self.make_random_genome()
-        genomes = self.get_best_previous_agents(10)
+    def make_new_offspring(self, genomes):
         parents = random.sample(genomes, 2)
         offspring = self.reproduce_genome(parents[0], parents[1], 1)
         chosen = random.choice(offspring)
         mutated = self.mutate_genome(chosen, 1)[0]
         return mutated
+
+    def make_genome_from_previous(self):
+        if len(self.previous_agents) < 10:
+            return self.make_random_genome()
+        genomes = self.get_best_previous_agents(10)
+        return self.make_new_offspring(genomes)
+
+    def get_best_genomes_from_store(self, num):
+        fitness = [x[0] for x in self.genome_store]
+        indices = np.argpartition(fitness,-num)[-num:]
+        genomes = [self.genome_store[i][0] for i in indices]
+        return genomes
 
     def store_genome(self, genome, fitness):
         min_fitness = 0
@@ -1485,7 +1503,7 @@ class game_space:
         if fitness > self.agent_start_energy and fitness > min_fitness:
             if len(self.genome_store) >= 100:
                 self.genome_store.pop(min_item)
-            self.genome_store.append([fitness, genome])
+            self.genome_store.append([genome, fitness])
 
     def make_genome_from_active(self):
         return self.make_genome_from_previous()
@@ -1525,7 +1543,7 @@ class game_space:
         vrange = self.agent_view_distance
         gsitems = len(self.genome_store)
         mpf = np.mean([x[1] for x in self.previous_agents])
-        gf = [x[0] for x in self.genome_store]
+        gf = [x[1] for x in self.genome_store]
         gsmea = 0
         gsmax = 0
         if len(gf) > 0:
@@ -1586,7 +1604,7 @@ class game_space:
         msg += "  max fitness: " + "%.2f"%gsmax
         msg += "\n\n"
         ta = sum([self.agent_actions[x] for x in self.actions])
-        bars = [int(400*(self.agent_actions[x]/ta)) for x in self.actions]
+        bars = [int(300*(self.agent_actions[x]/ta)) for x in self.actions]
         for i, x in enumerate(self.actions):
             space = (15-len(x))*" "
             bar = bars[i]*"#"
