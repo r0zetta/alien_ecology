@@ -313,6 +313,13 @@ class game_space:
         self.agent_view_distance = agent_view_distance
         self.visible_area = math.pi*(self.agent_view_distance**2)
         self.mutation_rate = mutation_rate
+        self.agent_types = ["evolving",
+                            "learning"]
+        self.agent_actions = {}
+        self.recent_actions = {}
+        for t in self.agent_types:
+            self.agent_actions[t] = Counter()
+            self.recent_actions[t] = deque()
         self.actions = ["rotate_right",
                         "rotate_left",
                         "propel",
@@ -322,8 +329,6 @@ class game_space:
                         "mate",
                         "emit_pheromone",
                         "move_random"]
-        self.agent_actions = Counter()
-        self.recent_actions = deque()
         self.observations = ["visible_food",
                              "adjacent_food",
                              "food_in_range",
@@ -674,20 +679,23 @@ class game_space:
 ########################
 # Agent runtime routines
 ########################
-    def record_recent_actions(self, action):
-        if len(self.recent_actions) > 1000:
-            self.recent_actions.popleft()
-        self.recent_actions.append(action)
+    def record_recent_actions(self, action, atype):
+        t = self.agent_types[atype]
+        if len(self.recent_actions[t]) > 1000:
+            self.recent_actions[t].popleft()
+        self.recent_actions[t].append(action)
         ra = Counter()
-        for a in self.recent_actions:
+        for a in self.recent_actions[t]:
             ra[self.actions[a]] += 1
-        self.agent_actions = ra
+        self.agent_actions[t] = ra
 
     def run_agent_actions(self):
         for n in range(len(self.agents)):
             action = int(self.agents[n].get_action())
-            a = self.actions[action]
-            self.record_recent_actions(action)
+            atype = 0
+            if self.agents[n].learnable == True:
+                atype = 1
+            self.record_recent_actions(action, atype)
             self.apply_agent_action(n, action)
             self.update_agent_position(n)
 
@@ -1524,9 +1532,21 @@ class game_space:
                 mx = np.max(temp)
                 mi = np.min(temp)
                 lmsg += "mean " + l + ": " + "%.2f"%me
-                lmsg += " max " + l + ": " + "%.2f"%mx
-                lmsg += " min " + l + ": " + "%.2f"%mi
+                lmsg += "  max " + l + ": " + "%.2f"%mx
+                lmsg += "  min " + l + ": " + "%.2f"%mi
                 lmsg += "\n"
+        return lmsg
+
+    def print_action_dist(self, atype):
+        lmsg = atype + " agent action distribution:"
+        lmsg += "\n"
+        ta = sum([self.agent_actions[atype][x] for x in self.actions])
+        bars = [int(300*(self.agent_actions[atype][x]/ta)) for x in self.actions]
+        for i, x in enumerate(self.actions):
+            space = (15-len(x))*" "
+            bar = bars[i]*"#"
+            lmsg += str(x) + ":" + space + bar + "\n"
+        lmsg += "\n"
         return lmsg
 
     def get_stats(self):
@@ -1615,14 +1635,9 @@ class game_space:
         msg += "Items in genome store: " + str(gsitems)
         msg += "\n"
         msg += self.make_labels(self.genome_store)
-        msg += "\n\n"
-        ta = sum([self.agent_actions[x] for x in self.actions])
-        bars = [int(300*(self.agent_actions[x]/ta)) for x in self.actions]
-        for i, x in enumerate(self.actions):
-            space = (15-len(x))*" "
-            bar = bars[i]*"#"
-            msg += str(x) + ":" + space + bar + "\n"
         msg += "\n"
+        for atype in self.agent_types:
+            msg += self.print_action_dist(atype)
         return msg
 
     def print_stats(self):
