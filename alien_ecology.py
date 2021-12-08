@@ -817,12 +817,13 @@ class game_space:
 
     def reset_agents(self, reset):
         for index in reset:
+            l = int(self.agents[index].learnable)
             a = self.agents[index].age
             h = self.agents[index].happiness
             d = self.agents[index].distance_travelled
             f = a + h + d
             g = self.agents[index].model.get_w()
-            entry = [g, f, a, h, d]
+            entry = [g, f, a, h, d, l]
             self.store_genome(entry)
             self.add_previous_agent(entry)
             self.agents[index].previous_fitness.append(f)
@@ -840,12 +841,13 @@ class game_space:
 
     def kill_agents(self, dead):
         for index in dead:
+            l = int(self.agents[index].learnable)
             a = self.agents[index].age
             h = self.agents[index].happiness
             d = self.agents[index].distance_travelled
             f = a + h + d
             g = self.agents[index].model.get_w()
-            entry = [g, f, a, h, d]
+            entry = [g, f, a, h, d, l]
             self.store_genome(entry)
             self.add_previous_agent(entry)
             self.deaths += 1
@@ -1520,20 +1522,27 @@ class game_space:
 ######################
 # Printable statistics
 ######################
-    def make_labels(self, var):
+    def make_labels(self, var, affix):
         labels = ["fitness", "age", "happiness", "distance"]
-        lmsg = ""
         if len(var) < 1:
             return ""
-        for i, l in enumerate(labels):
-            temp = [x[i+1] for x in var]
-            if len(temp) > 0:
-                me = np.mean(temp)
-                mx = np.max(temp)
-                mi = np.min(temp)
-                lmsg += "mean " + l + ": " + "%.2f"%me
-                lmsg += "  max " + l + ": " + "%.2f"%mx
-                lmsg += "  min " + l + ": " + "%.2f"%mi
+        lmsg = ""
+        conds = ["evolving", "learning"]
+        for cond, lab in enumerate(conds):
+            nvar = [x for x in var if x[5]==cond]
+            if len(nvar) > 0:
+                lmsg += affix + lab + " agent (" + str(len(nvar)) + ") stats:"
+                lmsg += "\n"
+                for i, l in enumerate(labels):
+                    temp = [x[i+1] for x in nvar]
+                    if len(temp) > 0:
+                        me = np.mean(temp)
+                        mx = np.max(temp)
+                        mi = np.min(temp)
+                        lmsg += "mean " + l + ": " + "%.2f"%me
+                        lmsg += "  max " + l + ": " + "%.2f"%mx
+                        lmsg += "  min " + l + ": " + "%.2f"%mi
+                        lmsg += "\n"
                 lmsg += "\n"
         return lmsg
 
@@ -1582,39 +1591,24 @@ class game_space:
 
         msg = ""
         msg += "Starting agents: " + str(self.num_agents)
+        msg += "  learning: " + str(learnable)
+        msg += "  evolving: " + str(evolving)
         msg += "  area size: " + str(self.area_size)
         msg += "  Step: " + str(self.steps)
         msg += "\n"
         msg += "Year length: " + str(self.year_length)
-        msg += " day length: " + str(self.day_length)
-        msg += " min reproduction age: " + str(self.min_reproduction_age)
-        msg += " min reproduction energy: " + str(self.min_reproduction_energy)
+        msg += "  day length: " + str(self.day_length)
+        msg += "  min reproduction age: " + str(self.min_reproduction_age)
+        msg += "  min reproduction energy: " + str(self.min_reproduction_energy)
         msg += "\n"
         msg += "Action size: " + str(self.action_size)
         msg += "  state_size: " + str(self.state_size)
         msg += "  hidden: " + str(self.hidden_size)
         msg += "  genome size: " + str(self.genome_size)
         msg += "\n"
-        msg += "Learnable: " + str(learnable) + " evolving: " + str(evolving)
+        msg += "Food: " + str(num_food) + "  energy: " + str(food_energy)
+        msg += "  agents: " + str(num_agents) + " energy: " + str(agent_energy)
         msg += "\n\n"
-        msg += "Food: " + str(num_food) + " energy: " + str(food_energy)
-        msg += "\n"
-        msg += "Agents: " + str(num_agents) + " energy: " + str(agent_energy)
-        msg += "\n\n"
-        msg += "mean age: " + "%.2f"%mean_age
-        msg += "  max age: " + str(max_age)
-        msg += "\n"
-        msg += "mean happiness: " + "%.2f"%mean_hap
-        msg += "  max happiness: " + str(max_hap)
-        msg += "  min happiness: " + str(min_hap)
-        msg += "\n"
-        msg += "mean distance moved: " + "%.2f"%mean_d
-        msg += "  max distance moved: " + "%.2f"%max_d
-        msg += "\n\n"
-        msg += "Previous agents:"
-        msg += "\n"
-        msg += self.make_labels(self.previous_agents)
-        msg += "\n"
         msg += "Spawns: " + str(self.spawns)
         msg += "  resets: " + str(self.resets)
         msg += "  births: " + str(self.births)
@@ -1626,16 +1620,26 @@ class game_space:
         msg += "  planted: " + str(self.food_planted)
         msg += "\n\n"
         msg += "Visual range: " + "%.2f"%vrange
-        msg += " Environment temp: " + "%.2f"%etemp
+        msg += "  Environment temp: " + "%.2f"%etemp
         msg += "\n"
         msg += "mean agent temp: " + str(mean_temp)
         msg += "  max agent temp: " + str(max_temp)
         msg += "  min agent temp: " + str(min_temp)
         msg += "\n\n"
+        msg += "mean age: " + "%.2f"%mean_age
+        msg += "  max age: " + str(max_age)
+        msg += "\n"
+        msg += "mean happiness: " + "%.2f"%mean_hap
+        msg += "  max happiness: " + str(max_hap)
+        msg += "  min happiness: " + str(min_hap)
+        msg += "\n"
+        msg += "mean distance moved: " + "%.2f"%mean_d
+        msg += "  max distance moved: " + "%.2f"%max_d
+        msg += "\n\n"
+        msg += self.make_labels(self.previous_agents, "Previous ")
         msg += "Items in genome store: " + str(gsitems)
         msg += "\n"
-        msg += self.make_labels(self.genome_store)
-        msg += "\n"
+        msg += self.make_labels(self.genome_store, "Genome store ")
         for atype in self.agent_types:
             msg += self.print_action_dist(atype)
         return msg
