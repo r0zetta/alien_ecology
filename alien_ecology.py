@@ -249,27 +249,27 @@ class game_space:
     def __init__(self,
                  hidden_size=[32, 32],
                  num_prev_states=1,
-                 learners=0.50,
+                 learners=1.00,
                  mutation_rate=0.001,
                  area_size=100,
                  year_length=50*100,
                  day_length=50,
-                 num_agents=100,
+                 num_agents=50,
                  agent_start_energy=200,
                  agent_max_inventory=10,
-                 num_predators=5,
+                 num_predators=3,
                  predator_view_distance=5,
                  predator_kill_distance=2,
-                 food_sources=30,
+                 food_sources=40,
                  food_spawns=10,
                  food_dist=7,
                  food_repro_energy=15,
                  food_start_energy=5,
                  food_energy_growth=0.1,
-                 food_plant_success=1,
-                 pheromone_decay=0.90,
+                 food_plant_success=0.2,
+                 pheromone_decay=0.95,
                  min_reproduction_age=50,
-                 min_reproduction_energy=140,
+                 min_reproduction_energy=100,
                  reproduction_cost=0,
                  agent_view_distance=5,
                  visuals=True,
@@ -407,6 +407,11 @@ class game_space:
 
 
 # To do:
+# - measure effect of GA on training
+# - if GA has a neutral of positive effect, this shows that most of the agents
+# configure their parameters in a similar way
+# - how about flaggelae instead of turn and move?
+# - longer flaggelae mean more inertial damping, but greater "visibility"
 # - record age, happiness, distance, etc. in previous and stored
 # - implement set_w for learning agents
 #  - record learning agent age
@@ -434,7 +439,7 @@ class game_space:
         yabs = self.predators[index].ypos
         zabs = self.predators[index].zpos
         s = 2
-        texture = "textures/predator"
+        texture = "textures/red"
         self.predators[index].entity = Entity(model='sphere',
                                               color=color.white,
                                               scale=(s,s,s),
@@ -1108,7 +1113,7 @@ class game_space:
                 if success == True:
                     self.food_planted += 1
                     self.agents[index].food_inventory -= 1
-                    self.agents[index].happiness += 5
+                    self.agents[index].happiness += 5*(1/self.food_plant_success)
                     reward = 1
                 else:
                     self.agents[index].happiness -= 1
@@ -1560,6 +1565,8 @@ class game_space:
         lmsg = atype + " agent action distribution:"
         lmsg += "\n"
         ta = sum([self.agent_actions[atype][x] for x in self.actions])
+        if ta == 0:
+            return ""
         bars = [int(300*(self.agent_actions[atype][x]/ta)) for x in self.actions]
         for i, x in enumerate(self.actions):
             space = (15-len(x))*" "
