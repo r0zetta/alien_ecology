@@ -247,8 +247,11 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[32, 32],
+                 hidden_size=[64, 64],
                  num_prev_states=1,
+                 num_recent_actions=1000,
+                 num_previous_agents=500,
+                 genome_store_size=500,
                  learners=1.00,
                  mutation_rate=0.001,
                  area_size=100,
@@ -284,6 +287,9 @@ class game_space:
         self.food_picked = 0
         self.food_eaten = 0
         self.food_planted = 0
+        self.num_recent_actions = num_recent_actions
+        self.num_previous_agents = num_previous_agents
+        self.genome_store_size = genome_store_size
         self.learners = learners
         self.visuals = visuals
         self.savedir = savedir
@@ -692,7 +698,7 @@ class game_space:
 ########################
     def record_recent_actions(self, action, atype):
         t = self.agent_types[atype]
-        if len(self.recent_actions[t]) > 1000:
+        if len(self.recent_actions[t]) > self.num_recent_actions:
             self.recent_actions[t].popleft()
         self.recent_actions[t].append(action)
         ra = Counter()
@@ -1489,7 +1495,7 @@ class game_space:
         return mutated
 
     def add_previous_agent(self, entry):
-        if len(self.previous_agents) >= 100:
+        if len(self.previous_agents) >= self.num_previous_agents:
             self.previous_agents.popleft()
         self.previous_agents.append(entry)
 
@@ -1504,9 +1510,10 @@ class game_space:
         return genomes
 
     def make_genome_from_previous(self):
-        if len(self.previous_agents) < 10:
+        num_g = int(self.num_previous_agents * 0.1)
+        if len(self.previous_agents) < num_g:
             return self.make_random_genome()
-        genomes = self.get_best_previous_genomes(10)
+        genomes = self.get_best_previous_genomes(num_g)
         return self.make_new_offspring(genomes)
 
     def get_best_agents_from_store(self, num):
@@ -1528,7 +1535,7 @@ class game_space:
             min_item = np.argmin(fitnesses)
             min_fitness = fitnesses[min_item]
         if fitness > self.agent_start_energy and fitness > min_fitness:
-            if len(self.genome_store) >= 100:
+            if len(self.genome_store) >= self.genome_store_size:
                 self.genome_store.pop(min_item)
             self.genome_store.append(entry)
 
@@ -1653,10 +1660,11 @@ class game_space:
             bpae = 10 - bpal
         gsal = 0
         gsae = 0
-        if len(self.genome_store) > 10:
-            gsi = self.get_best_agents_from_store(10)
+        gss = int(self.genome_store_size * 0.1)
+        if len(self.genome_store) > gss:
+            gsi = self.get_best_agents_from_store(gss)
             gsal = sum([self.genome_store[i][5] for i in gsi])
-            gsae = 10 - gsal
+            gsae = gss - gsal
 
         msg = ""
         msg += "Starting agents: " + str(self.num_agents)
