@@ -1578,20 +1578,7 @@ class game_space:
         lmsg += "\n"
         return lmsg
 
-    def get_stats(self):
-        num_agents = len(self.agents)
-        l_agents = sum([x.learnable for x in self.agents])
-        e_agents = num_agents - l_agents
-        agent_energy = int(sum([x.energy for x in self.agents]))
-        num_food = len(self.food)
-        food_energy = int(sum([x.energy for x in self.food]))
-        evolving = 0
-        learnable = 0
-        for index in range(len(self.agents)):
-            if self.agents[index].learnable == True:
-                learnable += 1
-            else:
-                evolving += 1
+    def print_current_stats(self):
         ages = [x.age for x in self.agents]
         max_age = np.max(ages)
         mean_age = int(np.mean(ages))
@@ -1602,12 +1589,61 @@ class game_space:
         d = [x.distance_travelled for x in self.agents]
         max_d = np.max(d)
         mean_d = int(np.mean(d))
+        msg = ""
+        msg += "mean age: " + "%.2f"%mean_age
+        msg += "  max age: " + str(max_age)
+        msg += "\n"
+        msg += "mean happiness: " + "%.2f"%mean_hap
+        msg += "  max happiness: " + str(max_hap)
+        msg += "  min happiness: " + str(min_hap)
+        msg += "\n"
+        msg += "mean distance moved: " + "%.2f"%mean_d
+        msg += "  max distance moved: " + "%.2f"%max_d
+        msg += "\n\n"
+        return msg
+
+    def print_food_stats(self):
+        msg = ""
+        msg += "Food picked: " + str(self.food_picked)
+        msg += "  eaten: " + str(self.food_eaten) 
+        msg += "  planted: " + str(self.food_planted)
+        msg += "\n\n"
+        return msg
+
+    def print_spawn_stats(self):
+        msg = ""
+        msg += "Spawns: " + str(self.spawns)
+        msg += "  resets: " + str(self.resets)
+        msg += "  births: " + str(self.births)
+        msg += "  deaths: " + str(self.deaths)
+        msg += "  killed: " + str(self.killed)
+        msg += "\n"
+        return msg
+
+    def print_temp_stats(self):
+        vrange = self.agent_view_distance
         etemp = self.environment_temperature
         atemp = [x.temperature for x in self.agents]
         mean_temp = int(np.mean(atemp))
         max_temp = int(max(atemp))
         min_temp = int(min(atemp))
-        vrange = self.agent_view_distance
+        msg = ""
+        msg += "Visual range: " + "%.2f"%vrange
+        msg += "  Environment temp: " + "%.2f"%etemp
+        msg += "\n"
+        msg += "mean agent temp: " + str(mean_temp)
+        msg += "  max agent temp: " + str(max_temp)
+        msg += "  min agent temp: " + str(min_temp)
+        msg += "\n\n"
+        return msg
+
+    def get_stats(self):
+        num_agents = len(self.agents)
+        l_agents = sum([x.learnable for x in self.agents])
+        e_agents = num_agents - l_agents
+        agent_energy = int(sum([x.energy for x in self.agents]))
+        num_food = len(self.food)
+        food_energy = int(sum([x.energy for x in self.food]))
         gsitems = len(self.genome_store)
         mpf = np.mean([x[1] for x in self.previous_agents])
         bpal = 0
@@ -1625,8 +1661,7 @@ class game_space:
 
         msg = ""
         msg += "Starting agents: " + str(self.num_agents)
-        msg += "  learning: " + str(learnable)
-        msg += "  evolving: " + str(evolving)
+        msg += "  learners: " + "%.2f"%(self.learners*self.num_agents)
         msg += "  area size: " + str(self.area_size)
         msg += "  Step: " + str(self.steps)
         msg += "\n"
@@ -1646,33 +1681,10 @@ class game_space:
         msg += "  learning: " + str(l_agents)
         msg += "  evolving: " + str(e_agents)
         msg += "\n\n"
-        msg += "Spawns: " + str(self.spawns)
-        msg += "  resets: " + str(self.resets)
-        msg += "  births: " + str(self.births)
-        msg += "  deaths: " + str(self.deaths)
-        msg += "  killed: " + str(self.killed)
-        msg += "\n"
-        msg += "Food picked: " + str(self.food_picked)
-        msg += "  eaten: " + str(self.food_eaten) 
-        msg += "  planted: " + str(self.food_planted)
-        msg += "\n\n"
-        msg += "Visual range: " + "%.2f"%vrange
-        msg += "  Environment temp: " + "%.2f"%etemp
-        msg += "\n"
-        msg += "mean agent temp: " + str(mean_temp)
-        msg += "  max agent temp: " + str(max_temp)
-        msg += "  min agent temp: " + str(min_temp)
-        msg += "\n\n"
-        msg += "mean age: " + "%.2f"%mean_age
-        msg += "  max age: " + str(max_age)
-        msg += "\n"
-        msg += "mean happiness: " + "%.2f"%mean_hap
-        msg += "  max happiness: " + str(max_hap)
-        msg += "  min happiness: " + str(min_hap)
-        msg += "\n"
-        msg += "mean distance moved: " + "%.2f"%mean_d
-        msg += "  max distance moved: " + "%.2f"%max_d
-        msg += "\n\n"
+        msg += self.print_spawn_stats()
+        msg += self.print_temp_stats()
+        msg += self.print_food_stats()
+        #msg += self.print_current_stats()
         msg += self.make_labels(self.previous_agents, "Previous ")
         msg += "Top 10 previous agents: learning: " + str(bpal)
         msg += "  evolving: " + str(bpae)
