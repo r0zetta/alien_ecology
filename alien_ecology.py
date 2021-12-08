@@ -327,6 +327,7 @@ class game_space:
                         "pick_food",
                         "plant_food",
                         "eat_food",
+                        "null",
                         "mate",
                         "emit_pheromone",
                         "move_random"]
@@ -418,6 +419,7 @@ class game_space:
 # - add disease
 # - add poisonous food
 # - add cold and hot areas
+# - add light and dark areas
 # - add a mechanism to inherit size, speed, resilience to temperature, etc.
 # - add type and affinity for certain types
 # - add sounds
@@ -804,16 +806,15 @@ class game_space:
             return None, None
 
     def replace_learner_genome(self, index):
-        if len(self.agents[index].previous_fitness) >= 50:
-            if len(self.genome_store) >= 50:
+        if len(self.agents[index].previous_fitness) >= 30:
+            if len(self.previous_agents) >= 30:
                 mpf = np.mean(self.agents[index].previous_fitness)
                 self.agents[index].previous_fitness = []
-                gf = [x[1] for x in self.genome_store]
-                gsmea = np.mean(gf)
-                if gsmea > 0:
-                    if mpf < gsmean * 0.75:
-                        s = self.get_best_genomes_from_store(10)
-                        g = random.choice(s)
+                pf = [x[1] for x in self.previous_agents]
+                pfm = np.mean(pf)
+                if pfm > 0:
+                    if mpf < pfm * 0.75:
+                        g = self.make_genome_from_previous()
                         self.agents[index].set_genome(g)
 
     def reset_agents(self, reset):
