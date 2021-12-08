@@ -251,8 +251,8 @@ class game_space:
                  learners=0.50,
                  mutation_rate=0.001,
                  area_size=100,
-                 year_length=120*300,
-                 day_length=120,
+                 year_length=50*100,
+                 day_length=50,
                  num_agents=100,
                  agent_start_energy=200,
                  agent_max_inventory=10,
@@ -457,7 +457,7 @@ class game_space:
             self.load_genomes()
             sg = []
             for item in self.genome_store:
-                g, f = item
+                g = item[0]
                 sg.append(g)
             if len(sg) > self.num_agents:
                 self.genome_pool = random.sample(sg, self.num_agents)
@@ -643,6 +643,17 @@ class game_space:
             yv += self.area_size
         return xv, yv
 
+    def filter_by_distance(self, x1, y1, x2, y2, radius):
+        if abs(x1 - x2) <= radius:
+            return True
+        if abs(x2 - x1) <= radius:
+            return True
+        if abs(y1 - y2) <= radius:
+            return True
+        if abs(y2 - y1) <= radius:
+            return True
+        return False
+
 ########################
 # Environmental effects
 ########################
@@ -711,17 +722,6 @@ class game_space:
         self.set_initial_agent_state(ai)
         if self.visuals == True:
             self.set_agent_entity(ai)
-
-    def filter_by_distance(self, x1, y1, x2, y2, radius):
-        if abs(x1 - x2) <= radius:
-            return True
-        if abs(x2 - x1) <= radius:
-            return True
-        if abs(y1 - y2) <= radius:
-            return True
-        if abs(y2 - y1) <= radius:
-            return True
-        return False
 
     def get_agents_in_radius(self, xpos, ypos, radius):
         ret = []
@@ -814,8 +814,9 @@ class game_space:
             d = self.agents[index].distance_travelled
             f = a + h + d
             g = self.agents[index].model.get_w()
-            self.store_genome(g, f)
-            self.add_previous_agent(g, f)
+            entry = [g, f, a, h, d]
+            self.store_genome(entry)
+            self.add_previous_agent(entry)
             self.agents[index].previous_fitness.append(f)
             self.replace_learner_genome(index)
             self.deaths += 1
@@ -836,8 +837,9 @@ class game_space:
             d = self.agents[index].distance_travelled
             f = a + h + d
             g = self.agents[index].model.get_w()
-            self.store_genome(g, f)
-            self.add_previous_agent(g, f)
+            entry = [g, f, a, h, d]
+            self.store_genome(entry)
+            self.add_previous_agent(entry)
             self.deaths += 1
             affected = self.get_adjacent_agent_indices(index)
             for i in affected:
@@ -861,10 +863,6 @@ class game_space:
                 self.spawn_evolving_agent(genome)
 
     def update_agent_status(self):
-        # Other things can happen here such as
-        # - environmental effects
-        # - happiness
-        # Decrease energy and remove if the agent is dead
         dead = set()
         reset = set()
         for index in range(len(self.agents)):
@@ -1463,23 +1461,23 @@ class game_space:
             new_genomes.append(gm)
         return new_genomes
 
-    def add_previous_agent(self, genome, fitness):
-        if len(self.previous_agents) >= 100:
-            self.previous_agents.popleft()
-        self.previous_agents.append([genome, fitness])
-
-    def get_best_previous_agents(self, num):
-        fitness = [x[1] for x in self.previous_agents]
-        indices = np.argpartition(fitness,-num)[-num:]
-        genomes = [self.previous_agents[i][0] for i in indices]
-        return genomes
-
     def make_new_offspring(self, genomes):
         parents = random.sample(genomes, 2)
         offspring = self.reproduce_genome(parents[0], parents[1], 1)
         chosen = random.choice(offspring)
         mutated = self.mutate_genome(chosen, 1)[0]
         return mutated
+
+    def add_previous_agent(self, entry):
+        if len(self.previous_agents) >= 100:
+            self.previous_agents.popleft()
+        self.previous_agents.append(entry)
+
+    def get_best_previous_agents(self, num):
+        fitness = [x[1] for x in self.previous_agents]
+        indices = np.argpartition(fitness,-num)[-num:]
+        genomes = [self.previous_agents[i][0] for i in indices]
+        return genomes
 
     def make_genome_from_previous(self):
         if len(self.previous_agents) < 10:
@@ -1488,22 +1486,23 @@ class game_space:
         return self.make_new_offspring(genomes)
 
     def get_best_genomes_from_store(self, num):
-        fitness = [x[0] for x in self.genome_store]
+        fitness = [x[1] for x in self.genome_store]
         indices = np.argpartition(fitness,-num)[-num:]
         genomes = [self.genome_store[i][0] for i in indices]
         return genomes
 
-    def store_genome(self, genome, fitness):
+    def store_genome(self, entry):
         min_fitness = 0
         min_item = 0
+        fitness = entry[1]
         if len(self.genome_store) > 0:
-            fitnesses = [x[0] for x in self.genome_store]
+            fitnesses = [x[1] for x in self.genome_store]
             min_item = np.argmin(fitnesses)
             min_fitness = fitnesses[min_item]
         if fitness > self.agent_start_energy and fitness > min_fitness:
             if len(self.genome_store) >= 100:
                 self.genome_store.pop(min_item)
-            self.genome_store.append([genome, fitness])
+            self.genome_store.append(entry)
 
     def make_genome_from_active(self):
         return self.make_genome_from_previous()
@@ -1513,6 +1512,23 @@ class game_space:
 ######################
 # Printable statistics
 ######################
+    def make_labels(self, var):
+        labels = ["fitness", "age", "happiness", "distance"]
+        lmsg = ""
+        if len(var) < 1:
+            return ""
+        for i, l in enumerate(labels):
+            temp = [x[i+1] for x in var]
+            if len(temp) > 0:
+                me = np.mean(temp)
+                mx = np.max(temp)
+                mi = np.min(temp)
+                lmsg += "mean " + l + ": " + "%.2f"%me
+                lmsg += " max " + l + ": " + "%.2f"%mx
+                lmsg += " min " + l + ": " + "%.2f"%mi
+                lmsg += "\n"
+        return lmsg
+
     def get_stats(self):
         num_agents = len(self.agents)
         agent_energy = int(sum([x.energy for x in self.agents]))
@@ -1543,12 +1559,7 @@ class game_space:
         vrange = self.agent_view_distance
         gsitems = len(self.genome_store)
         mpf = np.mean([x[1] for x in self.previous_agents])
-        gf = [x[1] for x in self.genome_store]
-        gsmea = 0
-        gsmax = 0
-        if len(gf) > 0:
-            gsmea = np.mean(gf)
-            gsmax = np.max(gf)
+
         msg = ""
         msg += "Starting agents: " + str(self.num_agents)
         msg += "  area size: " + str(self.area_size)
@@ -1580,8 +1591,10 @@ class game_space:
         msg += "mean distance moved: " + "%.2f"%mean_d
         msg += "  max distance moved: " + "%.2f"%max_d
         msg += "\n\n"
-        msg += "Previous agent mean fitness: " + "%.2f"%mpf
-        msg += "\n\n"
+        msg += "Previous agents:"
+        msg += "\n"
+        msg += self.make_labels(self.previous_agents)
+        msg += "\n"
         msg += "Spawns: " + str(self.spawns)
         msg += "  resets: " + str(self.resets)
         msg += "  births: " + str(self.births)
@@ -1599,9 +1612,9 @@ class game_space:
         msg += "  max agent temp: " + str(max_temp)
         msg += "  min agent temp: " + str(min_temp)
         msg += "\n\n"
-        msg += "Items in genome store: " + str(gsitems) 
-        msg += "  mean fitness: " + "%.2f"%gsmea
-        msg += "  max fitness: " + "%.2f"%gsmax
+        msg += "Items in genome store: " + str(gsitems)
+        msg += "\n"
+        msg += self.make_labels(self.genome_store)
         msg += "\n\n"
         ta = sum([self.agent_actions[x] for x in self.actions])
         bars = [int(300*(self.agent_actions[x]/ta)) for x in self.actions]
