@@ -1628,12 +1628,11 @@ class game_space:
         max_temp = int(max(atemp))
         min_temp = int(min(atemp))
         msg = ""
-        msg += "Visual range: " + "%.2f"%vrange
-        msg += "  Environment temp: " + "%.2f"%etemp
-        msg += "\n"
-        msg += "mean agent temp: " + str(mean_temp)
-        msg += "  max agent temp: " + str(max_temp)
-        msg += "  min agent temp: " + str(min_temp)
+        msg += "Visual_r: " + "%.2f"%vrange
+        msg += "  Env temp: " + "%.2f"%etemp
+        msg += "  mean a_temp: " + str(mean_temp)
+        msg += "  max a_temp: " + str(max_temp)
+        msg += "  min a_temp: " + str(min_temp)
         msg += "\n\n"
         return msg
 
@@ -1663,7 +1662,6 @@ class game_space:
         msg += "Starting agents: " + str(self.num_agents)
         msg += "  learners: " + "%.2f"%(self.learners*self.num_agents)
         msg += "  area size: " + str(self.area_size)
-        msg += "  Step: " + str(self.steps)
         msg += "\n"
         msg += "Year length: " + str(self.year_length)
         msg += "  day length: " + str(self.day_length)
@@ -1674,6 +1672,8 @@ class game_space:
         msg += "  state_size: " + str(self.state_size)
         msg += "  hidden: " + str(self.hidden_size)
         msg += "  genome size: " + str(self.genome_size)
+        msg += "\n\n"
+        msg += "Step: " + str(self.steps)
         msg += "\n"
         msg += "Food: " + str(num_food) + "  energy: " + str(food_energy)
         msg += "\n"
