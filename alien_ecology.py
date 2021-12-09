@@ -1661,14 +1661,18 @@ class game_space:
     def get_stats(self):
         num_agents = len(self.agents)
         l_agents = sum([x.learnable for x in self.agents])
+        self.record_stats("learning agents", l_agents)
         e_agents = num_agents - l_agents
+        self.record_stats("evolving agents", l_agents)
         agent_energy = int(sum([x.energy for x in self.agents]))
+        self.record_stats("agent energy", agent_energy)
         num_food = len(self.food)
         self.record_stats("food", num_food)
-        self.record_stats("food_picked", self.food_picked)
-        self.record_stats("food_eaten", self.food_eaten)
-        self.record_stats("food_planted", self.food_planted)
+        self.record_stats("food picked", self.food_picked)
+        self.record_stats("food eaten", self.food_eaten)
+        self.record_stats("food planted", self.food_planted)
         food_energy = int(sum([x.energy for x in self.food]))
+        self.record_stats("food energy", food_energy)
         gsitems = len(self.genome_store)
         mpf = np.mean([x[1] for x in self.previous_agents])
         bpal = 0
