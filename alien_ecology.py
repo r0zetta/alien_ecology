@@ -278,6 +278,7 @@ class game_space:
                  agent_view_distance=5,
                  visuals=True,
                  save_stuff=True,
+                 record_every=10,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
         self.steps = 0
@@ -299,6 +300,7 @@ class game_space:
         self.statsdir = statsdir
         self.stats = {}
         self.load_stats()
+        self.record_every = record_every
         self.save_stuff = save_stuff
         self.num_prev_states = num_prev_states
         self.environment_temperature = 20
@@ -695,6 +697,7 @@ class game_space:
     def set_environment_temperature(self):
         osc = np.sin(self.steps/self.year_length)
         self.environment_temperature = 14 + self.agent_view_distance + random.random()*3 + (16*osc)
+        self.record_stats("env_temp", self.environment_temperature)
 
     def set_agent_temperature(self, index):
         temp = self.environment_temperature - 5 + (self.count_adjacent_agents(index))
@@ -826,9 +829,9 @@ class game_space:
         else:
             return None, None
 
-    def replace_learner_genome(self, index):
-        if len(self.agents[index].previous_fitness) >= 30:
-            if len(self.previous_agents) >= 30:
+    def evaluate_learner(self, index):
+        if len(self.agents[index].previous_fitness) >= self.evaluate_learner_every:
+            if len(self.previous_agents) >= self.evaluate_learner_every:
                 mpf = np.mean(self.agents[index].previous_fitness)
                 self.agents[index].previous_fitness = []
                 pf = [x[1] for x in self.previous_agents]
@@ -850,7 +853,7 @@ class game_space:
             self.store_genome(entry)
             self.add_previous_agent(entry)
             self.agents[index].previous_fitness.append(f)
-            self.replace_learner_genome(index)
+            self.evaluate_learner(index)
             self.deaths += 1
             self.resets += 1
             affected = self.get_adjacent_agent_indices(index)
@@ -1555,7 +1558,7 @@ class game_space:
 # Printable statistics
 ######################
     def record_stats(self, stat_name, stat_value):
-        if self.steps % 10 == 0:
+        if self.steps % self.record_every == 0:
             if stat_name not in self.stats:
                 self.stats[stat_name] = []
             self.stats[stat_name].append(stat_value)
