@@ -291,7 +291,7 @@ class game_space:
                  record_every=10,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
-        self.steps = 0
+        self.steps = 1
         self.spawns = 0
         self.resets = 0
         self.births = 0
@@ -411,7 +411,6 @@ class game_space:
         self.create_predators()
 
     def step(self):
-        self.steps += 1
         self.set_environment_visibility()
         self.set_environment_temperature()
         self.set_agent_states()
@@ -428,6 +427,7 @@ class game_space:
             if self.steps % self.record_every == 0:
                 self.save_stats()
         self.print_stats()
+        self.steps += 1
 
 #########################
 # Initialization routines
@@ -1594,6 +1594,7 @@ class game_space:
             space = (15-len(x))*" "
             bar = bars[i]*"#"
             lmsg += str(x) + ":" + space + bar + "\n"
+            self.record_stats(atype+"_"+x, bars[i])
         lmsg += "\n"
         return lmsg
 
