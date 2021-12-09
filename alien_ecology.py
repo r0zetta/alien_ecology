@@ -201,6 +201,7 @@ class Agent:
 
     def reset(self):
         self.energy = self.start_energy
+        self.frequency = 1
         self.xvel = 0
         self.yvel = 0
         self.prev_action = 0
@@ -350,8 +351,9 @@ class game_space:
                         "pick_food",
                         "plant_food",
                         "eat_food",
-                        "null",
                         "mate",
+                        "freq_up",
+                        "freq_down",
                         "emit_pheromone",
                         "move_random"]
         self.observations = ["visible_food",
@@ -378,15 +380,12 @@ class game_space:
                              "food_inventory",
                              "environment_temperature",
                              "visibility",
-                             "age_oscillator_fast",
+                             "age_oscillator",
                              "reproduction_oscillator",
-                             "age_oscillator_med",
-                             "age_oscillator_slow",
-                             "step_oscillator_fast",
-                             "step_oscillator_med",
-                             "step_oscillator_med_offset",
-                             "step_oscillator_slow",
-                             "step_oscillator_slow_offset",
+                             "step_oscillator_day",
+                             "step_oscillator_day_offset",
+                             "step_oscillator_year",
+                             "step_oscillator_year_offset",
                              "random_input"]
         self.hidden_size = hidden_size
         self.action_size = len(self.actions)
@@ -676,9 +675,12 @@ class game_space:
 
     def set_environment_temperature(self):
         osc = np.sin(self.steps/self.year_length)
+        # Climate change modifies osc multiplier and/or initial value
+        osc2 = np.sin(2*self.steps/(self.year_length*10))
+        osc3 = np.sin(2*(self.steps+self.year_length*5)/(self.year_length*10))
         # Max temp: 38
         # Min temp: 4
-        self.environment_temperature = 16 + self.agent_view_distance + random.random()*3 + (14*osc)
+        self.environment_temperature = 16+osc3 + self.agent_view_distance + random.random()*3 + ((14+osc2)*osc)
         self.record_stats("env_temp", self.environment_temperature)
 
     def set_agent_temperature(self, index):
@@ -1139,6 +1141,12 @@ class game_space:
         self.agents[index].happiness -= 1
         return 0
 
+    def action_freq_up(self, index):
+        self.agents[index].frequency = self.agents[index].frequency * 0.9
+
+    def action_freq_down(self, index):
+        self.agents[index].frequency = self.agents[index].frequency * 1.1
+
     def action_emit_pheromone(self, index):
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
@@ -1227,31 +1235,22 @@ class game_space:
     def get_visibility(self, index):
         return self.agent_view_distance
 
-    def get_age_oscillator_fast(self, index):
-        return np.sin(self.agents[index].age)
+    def get_age_oscillator(self, index):
+        return np.sin(self.agents[index].age/self.agents[index].frequency)
 
     def get_reproduction_oscillator(self, index):
         return np.sin((self.agents[index].age+(self.min_reproduction_age/2))/self.min_reproduction_age)
 
-    def get_age_oscillator_med(self, index):
-        return np.sin(self.agents[index].age/self.day_length)
-
-    def get_age_oscillator_slow(self, index):
-        return np.sin(self.agents[index].age/self.year_length)
-
-    def get_step_oscillator_fast(self, index):
-        return np.sin(self.steps)
-
-    def get_step_oscillator_med(self, index):
+    def get_step_oscillator_day(self, index):
         return np.sin(self.steps/self.day_length)
 
-    def get_step_oscillator_med_offset(self, index):
+    def get_step_oscillator_day_offset(self, index):
         return np.sin((self.steps+(self.day_length/2))/self.day_length)
 
-    def get_step_oscillator_slow(self, index):
+    def get_step_oscillator_year(self, index):
         return np.sin(self.steps/self.year_length)
 
-    def get_step_oscillator_slow_offset(self, index):
+    def get_step_oscillator_year_offset(self, index):
         return np.sin((self.steps+(self.year_length/2))/self.year_length)
 
     def get_random_input(self, index):
@@ -1742,7 +1741,7 @@ def update():
 
     # Change background to reflect season and time of day
     tod = gs.agent_view_distance # 1-5
-    tod = (tod+2)*0.1
+    tod = (tod+2)*0.05
     osc = np.sin(gs.steps/gs.year_length)
     season = int(2 + (osc*2))
     c1 = int(100*tod)
@@ -1810,6 +1809,7 @@ else:
         gs.step()
 
 # To do:
+# move params into a config dict
 # - try initialization with 1, 0, -1
 # - measure effect of GA on training
 # - if GA has a neutral of positive effect, this shows that most of the agents
@@ -1818,13 +1818,7 @@ else:
 # ill-performing agents will be evolved from well-performing agents
 # mating mechanism also introduces evolving agents into the mix
 # - how about flaggelae instead of turn and move?
-# - longer flaggelae mean more inertial damping, but greater "visibility"
-# - record age, happiness, distance, etc. in previous and stored
-# - implement set_w for learning agents
-#  - record learning agent age
-#  - if rolling mean age is low, replace weights with a sample from genome store
-#  - agent set_genome and then set_w
-# - add predators, both moving and stationary
+# longer flaggelae mean more inertial damping, but greater "visibility"
 # - queens?
 # - add climate change, both periodic and from balance of plants and organisms
 # - add hunger
@@ -1842,5 +1836,7 @@ else:
 # increase/decrease oscillator[n] period
 # emit sound [n]
 # kill
+# attack predator
+# build
 # stun
 # kick
