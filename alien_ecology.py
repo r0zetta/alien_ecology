@@ -138,14 +138,6 @@ class GN_model:
             return True
         return False
 
-
-# Actions:
-# increase/decrease oscillator[n] period
-# emit sound [n]
-# kill
-# stun
-# kick
-
 class Predator:
     def __init__(self, x, y, z):
         self.xpos = x
@@ -245,19 +237,36 @@ class Pheromone:
         self.strength = 100
         self.entity = None
 
+# No evolution:
+# learners=1.00
+# evaluate_learner_every=1000000
+# min_reproduction_age=200
+# min_reproduction_energy=200
+
+# All evolution:
+# learners=0.00
+# min_reproduction_age=50
+# min_reproduction_energy=80
+
+# Hybrid evolution:
+# learners=0.50
+# evaluate_learner_every=30
+# min_reproduction_age=50
+# min_reproduction_energy=100
+
 class game_space:
     def __init__(self,
-                 hidden_size=[64, 64],
+                 hidden_size=[64],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=500,
                  genome_store_size=500,
-                 learners=0.50,
-                 evaluate_learner_every=30,
+                 learners=1.00,
+                 evaluate_learner_every=1000000,
                  mutation_rate=0.001,
                  area_size=100,
-                 year_length=50*100,
-                 day_length=50,
+                 year_length=30*50,
+                 day_length=30,
                  num_agents=50,
                  agent_start_energy=200,
                  agent_max_inventory=10,
@@ -273,7 +282,7 @@ class game_space:
                  food_plant_success=0.2,
                  pheromone_decay=0.95,
                  min_reproduction_age=50,
-                 min_reproduction_energy=80,
+                 min_reproduction_energy=200,
                  reproduction_cost=0,
                  agent_view_distance=5,
                  visuals=True,
@@ -419,35 +428,6 @@ class game_space:
                 self.save_genomes()
                 self.save_stats()
         self.print_stats()
-
-
-# To do:
-# - measure effect of GA on training
-# - if GA has a neutral of positive effect, this shows that most of the agents
-# configure their parameters in a similar way
-# - GA-assisted learning - set learners to 1.0
-# ill-performing agents will be evolved from well-performing agents
-# mating mechanism also introduces evolving agents into the mix
-# - how about flaggelae instead of turn and move?
-# - longer flaggelae mean more inertial damping, but greater "visibility"
-# - record age, happiness, distance, etc. in previous and stored
-# - implement set_w for learning agents
-#  - record learning agent age
-#  - if rolling mean age is low, replace weights with a sample from genome store
-#  - agent set_genome and then set_w
-# - add predators, both moving and stationary
-# - queens?
-# - add climate change, both periodic and from balance of plants and organisms
-# - add hunger
-# - add disease
-# - add poisonous food
-# - add cold and hot areas
-# - add light and dark areas
-# - add a mechanism to inherit size, speed, resilience to temperature, etc.
-# - add type and affinity for certain types
-# - add sounds
-# - add excretion and effect on agents and plant life
-# - start github repo and report
 
 #########################
 # Initialization routines
@@ -691,12 +671,14 @@ class game_space:
 
     def set_environment_visibility(self):
         osc = np.sin(self.steps/self.day_length)
-        self.agent_view_distance = 3 + (2*osc)
+        self.agent_view_distance = 3.5 + (1.5*osc)
         self.visible_area = math.pi*(self.agent_view_distance**2)
 
     def set_environment_temperature(self):
         osc = np.sin(self.steps/self.year_length)
-        self.environment_temperature = 14 + self.agent_view_distance + random.random()*3 + (16*osc)
+        # Max temp: 38
+        # Min temp: 4
+        self.environment_temperature = 16 + self.agent_view_distance + random.random()*3 + (14*osc)
         self.record_stats("env_temp", self.environment_temperature)
 
     def set_agent_temperature(self, index):
@@ -1826,3 +1808,39 @@ else:
     gs = game_space(visuals=False)
     while True:
         gs.step()
+
+# To do:
+# - try initialization with 1, 0, -1
+# - measure effect of GA on training
+# - if GA has a neutral of positive effect, this shows that most of the agents
+# configure their parameters in a similar way
+# - GA-assisted learning - set learners to 1.0
+# ill-performing agents will be evolved from well-performing agents
+# mating mechanism also introduces evolving agents into the mix
+# - how about flaggelae instead of turn and move?
+# - longer flaggelae mean more inertial damping, but greater "visibility"
+# - record age, happiness, distance, etc. in previous and stored
+# - implement set_w for learning agents
+#  - record learning agent age
+#  - if rolling mean age is low, replace weights with a sample from genome store
+#  - agent set_genome and then set_w
+# - add predators, both moving and stationary
+# - queens?
+# - add climate change, both periodic and from balance of plants and organisms
+# - add hunger
+# - add disease
+# - add poisonous food
+# - add cold and hot areas
+# - add light and dark areas
+# - add a mechanism to inherit size, speed, resilience to temperature, etc.
+# - add type and affinity for certain types
+# - add sounds
+# - add excretion and effect on agents and plant life
+# - start github repo and report
+
+# Other cctions:
+# increase/decrease oscillator[n] period
+# emit sound [n]
+# kill
+# stun
+# kick
