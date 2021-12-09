@@ -247,12 +247,13 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[16],
+                 hidden_size=[64, 64],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=500,
                  genome_store_size=500,
                  learners=0.50,
+                 evaluate_learner_every=30,
                  mutation_rate=0.001,
                  area_size=100,
                  year_length=50*100,
@@ -292,6 +293,7 @@ class game_space:
         self.num_previous_agents = num_previous_agents
         self.genome_store_size = genome_store_size
         self.learners = learners
+        self.evaluate_learner_every = evaluate_learner_every
         self.visuals = visuals
         self.savedir = savedir
         self.statsdir = statsdir
