@@ -262,13 +262,13 @@ class game_space:
                  num_recent_actions=1000,
                  num_previous_agents=500,
                  genome_store_size=500,
-                 learners=1.00,
-                 evaluate_learner_every=1000000,
+                 learners=0.50,
+                 evaluate_learner_every=30,
                  mutation_rate=0.001,
                  area_size=100,
                  year_length=30*50,
                  day_length=30,
-                 num_agents=50,
+                 num_agents=100,
                  agent_start_energy=200,
                  agent_max_inventory=10,
                  num_predators=3,
@@ -280,14 +280,14 @@ class game_space:
                  food_repro_energy=15,
                  food_start_energy=5,
                  food_energy_growth=0.1,
-                 food_plant_success=0.2,
+                 food_plant_success=0.4,
                  pheromone_decay=0.95,
                  min_reproduction_age=50,
-                 min_reproduction_energy=200,
+                 min_reproduction_energy=150,
                  reproduction_cost=0,
                  agent_view_distance=5,
                  visuals=True,
-                 save_stuff=True,
+                 save_stuff=False,
                  record_every=10,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
@@ -424,8 +424,8 @@ class game_space:
         if self.save_stuff == True:
             if self.steps % 1000 == 0:
                 self.save_genomes()
-            if self.steps % self.record_every == 0:
-                self.save_stats()
+        if self.steps % self.record_every == 0:
+            self.save_stats()
         self.print_stats()
         self.steps += 1
 
