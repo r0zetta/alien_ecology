@@ -1074,7 +1074,7 @@ class game_space:
         carrying = self.agents[index].food_inventory
         if carrying >= self.agent_max_inventory:
             self.agents[index].happiness -= 5
-            return 0
+            return -1
         reward = 0
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
@@ -1097,6 +1097,7 @@ class game_space:
         if self.agents[index].food_inventory > 0:
             if self.agents[index].energy >= self.agent_start_energy:
                 self.agents[index].happiness -= 5
+                reward = -1
             else:
                 self.food_eaten += 1
                 self.agents[index].energy += 20
@@ -1123,6 +1124,7 @@ class game_space:
                     self.agents[index].happiness -= 1
         else:
             self.agents[index].happiness -= 1
+            reward = -1
         return reward
 
     def action_mate(self, index):
