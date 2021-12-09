@@ -1,5 +1,5 @@
 from ursina import *
-import random, sys, time, os, pickle, math
+import random, sys, time, os, pickle, math, json
 import numpy as np
 from collections import Counter, deque
 import torch
@@ -247,12 +247,12 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[64, 64],
+                 hidden_size=[16],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=500,
                  genome_store_size=500,
-                 learners=1.00,
+                 learners=0.50,
                  mutation_rate=0.001,
                  area_size=100,
                  year_length=50*100,
@@ -277,13 +277,14 @@ class game_space:
                  agent_view_distance=5,
                  visuals=True,
                  save_stuff=True,
-                 savedir="alien_ecology_save"):
+                 savedir="alien_ecology_save",
+                 statsdir="alien_ecology_stats"):
         self.steps = 0
         self.spawns = 0
         self.resets = 0
         self.births = 0
         self.deaths = 0
-        self.killed = 0
+        self.eaten = 0
         self.food_picked = 0
         self.food_eaten = 0
         self.food_planted = 0
@@ -293,6 +294,9 @@ class game_space:
         self.learners = learners
         self.visuals = visuals
         self.savedir = savedir
+        self.statsdir = statsdir
+        self.stats = {}
+        self.load_stats()
         self.save_stuff = save_stuff
         self.num_prev_states = num_prev_states
         self.environment_temperature = 20
@@ -409,6 +413,7 @@ class game_space:
         if self.save_stuff == True:
             if self.steps % 20 == 0:
                 self.save_genomes()
+                self.save_stats()
         self.print_stats()
 
 
@@ -1018,7 +1023,7 @@ class game_space:
             if len(victims) > 0:
                 dead = []
                 reset = []
-                self.killed += len(victims)
+                self.eaten += len(victims)
                 for v in victims:
                     if self.agents[v].learnable == True:
                         reset.append(v)
@@ -1547,7 +1552,23 @@ class game_space:
 ######################
 # Printable statistics
 ######################
-    def make_labels(self, var, affix):
+    def record_stats(self, stat_name, stat_value):
+        if stat_name not in self.stats:
+            self.stats[stat_name] = []
+        self.stats[stat_name].append(stat_value)
+
+    def save_stats(self):
+        fp = os.path.join(self.statsdir, "stats.json")
+        with open(fp, "w") as f:
+            f.write(json.dumps(self.stats))
+
+    def load_stats(self):
+        fp = os.path.join(self.statsdir, "stats.json")
+        if os.path.exists(fp):
+            with open(fp, "r") as f:
+                self.stats = json.loads(f.read())
+
+    def make_labels(self, var, affix, saff):
         labels = ["fitness", "age", "happiness", "distance"]
         if len(var) < 1:
             return ""
@@ -1562,8 +1583,11 @@ class game_space:
                     temp = [x[i+1] for x in nvar]
                     if len(temp) > 0:
                         me = np.mean(temp)
-                        mx = np.max(temp)
-                        mi = np.min(temp)
+                        self.record_stats(saff+"_"+lab+"_"+l+"_mean", me)
+                        mx = max(temp)
+                        self.record_stats(saff+"_"+lab+"_"+l+"_max", mx)
+                        mi = min(temp)
+                        self.record_stats(saff+"_"+lab+"_"+l+"_min", mi)
                         lmsg += "mean " + l + ": " + "%.2f"%me
                         lmsg += "  max " + l + ": " + "%.2f"%mx
                         lmsg += "  min " + l + ": " + "%.2f"%mi
@@ -1623,7 +1647,7 @@ class game_space:
         msg += "  resets: " + str(self.resets)
         msg += "  births: " + str(self.births)
         msg += "  deaths: " + str(self.deaths)
-        msg += "  killed: " + str(self.killed)
+        msg += "  eaten: " + str(self.eaten)
         msg += "\n"
         return msg
 
@@ -1654,10 +1678,15 @@ class game_space:
         mpf = np.mean([x[1] for x in self.previous_agents])
         bpal = 0
         bpae = 0
-        if len(self.previous_agents) > 10:
-            bpi = self.get_best_previous_agents(10)
+        pss = int(self.num_previous_agents * 0.1)
+        if len(self.previous_agents) > pss:
+            bpi = self.get_best_previous_agents(pss)
             bpal = sum([self.previous_agents[i][5] for i in bpi])
-            bpae = 10 - bpal
+            bpae = pss - bpal
+            bplp = (bpal/pss)*100
+            self.record_stats("learned_in_top_prev", bplp)
+            bpep = (bpae/pss)*100
+            self.record_stats("evolved_in_top_prev", bpep)
         gsal = 0
         gsae = 0
         gss = int(self.genome_store_size * 0.1)
@@ -1665,6 +1694,10 @@ class game_space:
             gsi = self.get_best_agents_from_store(gss)
             gsal = sum([self.genome_store[i][5] for i in gsi])
             gsae = gss - gsal
+            gplp = (gsal/gss)*100
+            self.record_stats("learned_in_top_gs", gplp)
+            gpep = (gsae/gss)*100
+            self.record_stats("evolved_in_top_gs", gpep)
 
         msg = ""
         msg += "Starting agents: " + str(self.num_agents)
@@ -1693,16 +1726,16 @@ class game_space:
         msg += self.print_temp_stats()
         msg += self.print_food_stats()
         #msg += self.print_current_stats()
-        msg += self.make_labels(self.previous_agents, "Previous ")
-        msg += "Top 10 previous agents: learning: " + str(bpal)
+        msg += self.make_labels(self.previous_agents, "Previous ", "prev")
+        msg += "Top " + str(pss) + " previous agents: learning: " + str(bpal)
         msg += "  evolving: " + str(bpae)
         msg += "\n"
-        msg += "Top 10 agents in genome store: learning: " + str(gsal)
+        msg += "Top " + str(gss) + " agents in genome store: learning: " + str(gsal)
         msg += "  evolving: " + str(gsae)
         msg += "\n\n"
         msg += "Items in genome store: " + str(gsitems)
         msg += "\n"
-        msg += self.make_labels(self.genome_store, "Genome store ")
+        msg += self.make_labels(self.genome_store, "Genome store ", "gs")
         for atype in self.agent_types:
             msg += self.print_action_dist(atype)
         return msg
@@ -1763,6 +1796,10 @@ if len(sys.argv)>1:
 savedir = "alien_ecology_save"
 if not os.path.exists(savedir):
     os.makedirs(savedir)
+
+statsdir = "alien_ecology_stats"
+if not os.path.exists(statsdir):
+    os.makedirs(statsdir)
 
 if print_visuals == True:
     app = Ursina()
