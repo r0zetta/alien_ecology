@@ -1553,9 +1553,10 @@ class game_space:
 # Printable statistics
 ######################
     def record_stats(self, stat_name, stat_value):
-        if stat_name not in self.stats:
-            self.stats[stat_name] = []
-        self.stats[stat_name].append(stat_value)
+        if self.steps % 10 == 0:
+            if stat_name not in self.stats:
+                self.stats[stat_name] = []
+            self.stats[stat_name].append(stat_value)
 
     def save_stats(self):
         fp = os.path.join(self.statsdir, "stats.json")
