@@ -423,8 +423,9 @@ class game_space:
         self.update_pheromone_status()
         self.reproduce_food()
         if self.save_stuff == True:
-            if self.steps % 20 == 0:
+            if self.steps % 1000 == 0:
                 self.save_genomes()
+            if self.steps % self.record_every == 0:
                 self.save_stats()
         self.print_stats()
 
@@ -677,10 +678,10 @@ class game_space:
         osc = np.sin(self.steps/self.year_length)
         # Climate change modifies osc multiplier and/or initial value
         osc2 = np.sin(2*self.steps/(self.year_length*10))
-        osc3 = np.sin(2*(self.steps+self.year_length*5)/(self.year_length*10))
+        osc3 = np.sin(3*(self.steps+self.year_length*5)/(self.year_length*10))
         # Max temp: 38
         # Min temp: 4
-        self.environment_temperature = 16+osc3 + self.agent_view_distance + random.random()*3 + ((14+osc2)*osc)
+        self.environment_temperature = 14+osc3 + self.agent_view_distance + random.random()*3 + ((14+osc2)*osc)
         self.record_stats("env_temp", self.environment_temperature)
 
     def set_agent_temperature(self, index):
@@ -1660,6 +1661,10 @@ class game_space:
         e_agents = num_agents - l_agents
         agent_energy = int(sum([x.energy for x in self.agents]))
         num_food = len(self.food)
+        self.record_stats("food", num_food)
+        self.record_stats("food_picked", self.food_picked)
+        self.record_stats("food_eaten", self.food_eaten)
+        self.record_stats("food_planted", self.food_planted)
         food_energy = int(sum([x.energy for x in self.food]))
         gsitems = len(self.genome_store)
         mpf = np.mean([x[1] for x in self.previous_agents])
@@ -1691,8 +1696,8 @@ class game_space:
         msg += "  learners: " + "%.2f"%(self.learners*self.num_agents)
         msg += "  area size: " + str(self.area_size)
         msg += "\n"
-        msg += "Year length: " + str(self.year_length)
-        msg += "  day length: " + str(self.day_length)
+        msg += "Year length: " + str(self.year_length*2)
+        msg += "  day length: " + str(self.day_length*2)
         msg += "  min reproduction age: " + str(self.min_reproduction_age)
         msg += "  min reproduction energy: " + str(self.min_reproduction_energy)
         msg += "\n"
@@ -1817,10 +1822,17 @@ else:
 # - GA-assisted learning - set learners to 1.0
 # ill-performing agents will be evolved from well-performing agents
 # mating mechanism also introduces evolving agents into the mix
+
+# Experiments: graph agent age, fitness
+# No evolution
+# All evolution
+# Hybrid
+# Different hidden values: [16], [64], [32, 32]
+# Hybrid with and without mating
+
 # - how about flaggelae instead of turn and move?
 # longer flaggelae mean more inertial damping, but greater "visibility"
 # - queens?
-# - add climate change, both periodic and from balance of plants and organisms
 # - add hunger
 # - add disease
 # - add poisonous food
@@ -1833,7 +1845,6 @@ else:
 # - start github repo and report
 
 # Other cctions:
-# increase/decrease oscillator[n] period
 # emit sound [n]
 # kill
 # attack predator
