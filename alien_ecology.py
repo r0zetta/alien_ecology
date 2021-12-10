@@ -290,7 +290,7 @@ class game_space:
                  reward_age_only=True,
                  use_genome_store=0.5,
                  save_every=5000,
-                 record_every=50,
+                 record_every=10,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
         self.steps = 1
@@ -304,6 +304,7 @@ class game_space:
         self.food_planted = 0
         self.num_recent_actions = num_recent_actions
         self.num_previous_agents = num_previous_agents
+        self.fitness_index = 2 # 1: fitness, 2: age
         self.use_genome_store = use_genome_store
         self.genome_store_size = genome_store_size
         self.learners = learners
@@ -429,9 +430,8 @@ class game_space:
         if self.save_every > 0:
             if self.steps % self.save_every == 0:
                 self.save_genomes()
-        if self.record_every > 0:
-            if self.steps % self.record_every == 0:
-                self.save_stats()
+        if self.steps % 100 == 0:
+            self.save_stats()
         self.print_stats()
         self.steps += 1
 
@@ -899,8 +899,8 @@ class game_space:
             if temperature > 30:
                 energy_drain += (temperature - 30) * 0.1
                 self.agents[index].happiness -= 1
-            if temperature < 10:
-                energy_drain += (10 - temperature) * 0.1
+            if temperature < 5:
+                energy_drain += (5 - temperature) * 0.1
                 self.agents[index].happiness -= 1
             self.agents[index].energy -= energy_drain
             if self.agents[index].energy <= 0:
@@ -1502,7 +1502,7 @@ class game_space:
         self.previous_agents.append(entry)
 
     def get_best_previous_agents(self, num):
-        fitness = [x[1] for x in self.previous_agents]
+        fitness = [x[self.fitness_index] for x in self.previous_agents]
         indices = np.argpartition(fitness,-num)[-num:]
         return indices
 
@@ -1519,7 +1519,7 @@ class game_space:
         return self.make_new_offspring(genomes)
 
     def get_best_agents_from_store(self, num):
-        fitness = [x[1] for x in self.genome_store]
+        fitness = [x[self.fitness_index] for x in self.genome_store]
         indices = np.argpartition(fitness,-num)[-num:]
         return indices
 
