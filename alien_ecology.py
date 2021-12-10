@@ -268,7 +268,8 @@ class game_space:
                  area_size=100,
                  year_length=30*50,
                  day_length=30,
-                 num_agents=100,
+                 weather_harshness=0,
+                 num_agents=50,
                  agent_start_energy=200,
                  agent_max_inventory=10,
                  num_predators=3,
@@ -278,16 +279,17 @@ class game_space:
                  food_spawns=10,
                  food_dist=7,
                  food_repro_energy=15,
-                 food_start_energy=5,
+                 food_start_energy=10,
                  food_energy_growth=0.1,
-                 food_plant_success=0.4,
-                 pheromone_decay=0.95,
+                 food_plant_success=0.5,
+                 pheromone_decay=0.90,
                  min_reproduction_age=50,
-                 min_reproduction_energy=150,
+                 min_reproduction_energy=120,
                  reproduction_cost=0,
-                 agent_view_distance=5,
                  visuals=True,
-                 save_stuff=False,
+                 reward_age_only=True,
+                 use_genome_store=0.5,
+                 save_every=5000,
                  record_every=10,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
@@ -302,8 +304,10 @@ class game_space:
         self.food_planted = 0
         self.num_recent_actions = num_recent_actions
         self.num_previous_agents = num_previous_agents
+        self.use_genome_store = use_genome_store
         self.genome_store_size = genome_store_size
         self.learners = learners
+        self.reward_age_only = reward_age_only
         self.evaluate_learner_every = evaluate_learner_every
         self.visuals = visuals
         self.savedir = savedir
@@ -311,12 +315,13 @@ class game_space:
         self.stats = {}
         self.load_stats()
         self.record_every = record_every
-        self.save_stuff = save_stuff
+        self.save_every = save_every
         self.num_prev_states = num_prev_states
         self.environment_temperature = 20
         self.area_size = area_size
         self.year_length = year_length
         self.day_length = day_length
+        self.weather_harshness = weather_harshness
         self.num_agents = num_agents
         self.agent_max_inventory = agent_max_inventory
         self.agent_start_energy = agent_start_energy
@@ -335,7 +340,7 @@ class game_space:
         self.min_reproduction_age = min_reproduction_age
         self.min_reproduction_energy = min_reproduction_energy
         self.reproduction_cost = reproduction_cost
-        self.agent_view_distance = agent_view_distance
+        self.agent_view_distance = 5
         self.visible_area = math.pi*(self.agent_view_distance**2)
         self.mutation_rate = mutation_rate
         self.agent_types = ["evolving",
@@ -421,11 +426,12 @@ class game_space:
         self.update_agent_status()
         self.update_pheromone_status()
         self.reproduce_food()
-        if self.save_stuff == True:
-            if self.steps % 1000 == 0:
+        if self.save_every > 0:
+            if self.steps % self.save_every == 0:
                 self.save_genomes()
-        if self.steps % self.record_every == 0:
-            self.save_stats()
+        if self.record_every > 0:
+            if self.steps % self.record_every == 0:
+                self.save_stats()
         self.print_stats()
         self.steps += 1
 
@@ -679,9 +685,11 @@ class game_space:
         # Climate change modifies osc multiplier and/or initial value
         osc2 = np.sin(2*self.steps/(self.year_length*10))
         osc3 = np.sin(3*(self.steps+self.year_length*5)/(self.year_length*10))
+        v1 = 14 + self.weather_harshness + osc3
+        v2 = 12 + self.weather_harshness + osc2
         # Max temp: 38
         # Min temp: 4
-        self.environment_temperature = 14+osc3 + self.agent_view_distance + random.random()*3 + ((14+osc2)*osc)
+        self.environment_temperature = v1 + self.agent_view_distance + random.random()*3 + ((v2)*osc)
         self.record_stats("env_temp", self.environment_temperature)
 
     def set_agent_temperature(self, index):
@@ -823,13 +831,16 @@ class game_space:
                 pfm = np.mean(pf)
                 if pfm > 0:
                     if mpf < pfm * 0.75:
-                        g = self.make_genome_from_previous()
+                        g = self.make_new_genome()
                         self.agents[index].set_genome(g)
 
     def reset_agents(self, reset):
         for index in reset:
             l = int(self.agents[index].learnable)
             a = self.agents[index].age
+            reward = a/self.agent_start_energy
+            if self.reward_age_only == True:
+                self.agents[index].model.rewards[-1] = reward
             h = self.agents[index].happiness
             d = self.agents[index].distance_travelled
             f = a + h + d
@@ -873,14 +884,7 @@ class game_space:
         if len(self.agents) < self.num_agents:
             deficit = self.num_agents - len(self.agents)
             for _ in range(deficit):
-                genome = None
-                if len(self.agents) > 10:
-                    if random.random() > 0.05:
-                        genome = self.make_genome_from_active()
-                    else:
-                        genome = self.make_random_genome()
-                else:
-                    genome = self.make_random_genome()
+                genome = self.make_new_genome()
                 self.spawn_evolving_agent(genome)
 
     def update_agent_status(self):
@@ -1043,7 +1047,10 @@ class game_space:
         class_method = getattr(self, agent_function)
         reward = class_method(index)
         if self.agents[index].learnable == True:
-            self.agents[index].model.record_reward(reward)
+            if self.reward_age_only == True:
+                self.agents[index].model.record_reward(0)
+            else:
+                self.agents[index].model.record_reward(reward)
 
     def action_null(self, index):
         return 0
@@ -1520,6 +1527,13 @@ class game_space:
         genomes = [self.genome_store[i][0] for i in indices]
         return genomes
 
+    def make_genome_from_store(self):
+        num_g = int(self.genome_store_size * 0.1)
+        if len(self.genome_store) < num_g:
+            return self.make_random_genome()
+        genomes = self.get_best_genomes_from_store(num_g)
+        return self.make_new_offspring(genomes)
+
     def store_genome(self, entry):
         min_fitness = 0
         min_item = 0
@@ -1533,8 +1547,11 @@ class game_space:
                 self.genome_store.pop(min_item)
             self.genome_store.append(entry)
 
-    def make_genome_from_active(self):
-        return self.make_genome_from_previous()
+    def make_new_genome(self):
+        if random.random() < self.use_genome_store:
+            return self.make_genome_from_store()
+        else:
+            return self.make_genome_from_previous()
 
 
 
