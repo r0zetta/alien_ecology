@@ -279,7 +279,7 @@ class game_space:
                  food_spawns=10,
                  food_dist=7,
                  food_repro_energy=15,
-                 food_start_energy=7,
+                 food_start_energy=5,
                  food_energy_growth=0.1,
                  food_plant_success=0.5,
                  pheromone_decay=0.90,
@@ -288,7 +288,8 @@ class game_space:
                  reproduction_cost=0,
                  visuals=True,
                  reward_age_only=True,
-                 use_genome_store=0.5,
+                 respawn_genome_store=0.5,
+                 rebirth_genome_store=1,
                  save_every=5000,
                  record_every=10,
                  savedir="alien_ecology_save",
@@ -307,7 +308,8 @@ class game_space:
         self.num_recent_actions = num_recent_actions
         self.num_previous_agents = num_previous_agents
         self.fitness_index = 2 # 1: fitness, 2: age
-        self.use_genome_store = use_genome_store
+        self.respawn_genome_store = respawn_genome_store
+        self.rebirth_genome_store = rebirth_genome_store
         self.genome_store_size = genome_store_size
         self.learners = learners
         self.reward_age_only = reward_age_only
@@ -830,7 +832,7 @@ class game_space:
             mpf = np.mean([x[self.fitness_index] for x in self.agents[index].previous_stats])
             pfm = 0
             method = 0
-            if random.random() < self.use_genome_store:
+            if random.random() < self.rebirth_genome_store:
                 method = 1
             if method == 1:
                 if len(self.genome_store) > 1:
@@ -1577,7 +1579,7 @@ class game_space:
             self.genome_store.append(entry)
 
     def make_new_genome(self):
-        if random.random() < self.use_genome_store:
+        if random.random() < self.respawn_genome_store:
             return self.make_genome_from_store()
         else:
             return self.make_genome_from_previous()
