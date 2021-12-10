@@ -265,17 +265,17 @@ class game_space:
                  learners=0.50,
                  evaluate_learner_every=30,
                  mutation_rate=0.001,
-                 area_size=100,
-                 year_length=30*50,
-                 day_length=30,
+                 area_size=50,
+                 year_length=10*50,
+                 day_length=10,
                  weather_harshness=0,
-                 num_agents=50,
+                 num_agents=20,
                  agent_start_energy=200,
                  agent_max_inventory=10,
                  num_predators=3,
                  predator_view_distance=5,
                  predator_kill_distance=2,
-                 food_sources=40,
+                 food_sources=30,
                  food_spawns=10,
                  food_dist=7,
                  food_repro_energy=15,
@@ -1538,9 +1538,9 @@ class game_space:
     def store_genome(self, entry):
         min_fitness = 0
         min_item = 0
-        fitness = entry[1]
+        fitness = entry[self.fitness_index]
         if len(self.genome_store) > 0:
-            fitnesses = [x[1] for x in self.genome_store]
+            fitnesses = [x[self.fitness_index] for x in self.genome_store]
             min_item = np.argmin(fitnesses)
             min_fitness = fitnesses[min_item]
         if fitness > self.agent_start_energy and fitness > min_fitness:
@@ -1721,8 +1721,8 @@ class game_space:
         msg += "  learners: " + "%.2f"%(self.learners*self.num_agents)
         msg += "  area size: " + str(self.area_size)
         msg += "\n"
-        msg += "Year length: " + str(self.year_length*2)
-        msg += "  day length: " + str(self.day_length*2)
+        msg += "Year length: " + str(self.year_length*4)
+        msg += "  day length: " + str(self.day_length*4)
         msg += "  min reproduction age: " + str(self.min_reproduction_age)
         msg += "  min reproduction energy: " + str(self.min_reproduction_energy)
         msg += "\n"
