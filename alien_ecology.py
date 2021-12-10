@@ -257,7 +257,7 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[16],
+                 hidden_size=[32],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=500,
@@ -279,8 +279,8 @@ class game_space:
                  food_spawns=10,
                  food_dist=7,
                  food_repro_energy=15,
-                 food_start_energy=5,
-                 food_energy_growth=0.1,
+                 food_start_energy=10,
+                 food_energy_growth=0.5,
                  food_plant_success=0.5,
                  pheromone_decay=0.90,
                  min_reproduction_age=50,
@@ -359,7 +359,7 @@ class game_space:
                         "rotate_left",
                         "propel",
                         "pick_food",
-                        "plant_food",
+                        #"plant_food",
                         "eat_food",
                         "mate",
                         "freq_up",
@@ -1431,7 +1431,7 @@ class game_space:
         for index, f in enumerate(self.food):
             self.food[index].energy += growth
             if self.food[index].energy >= self.food_repro_energy:
-                if len(self.food) < 0.007*(self.area_size**2):
+                if len(self.food) < 0.02*(self.area_size**2):
                     self.spawn_new_food(self.food[index].xpos, self.food[index].ypos)
                     self.food[index].energy = self.food_start_energy
                 else:
@@ -1646,7 +1646,7 @@ class game_space:
             space = (15-len(x))*" "
             bar = bars[i]*"#"
             lmsg += str(x) + ":" + space + bar + "\n"
-            self.record_stats(atype+"_"+x, bars[i])
+            self.record_stats(atype+"_action_"+x, bars[i])
         lmsg += "\n"
         return lmsg
 
