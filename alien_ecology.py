@@ -153,7 +153,7 @@ class Predator:
 class Agent:
     def __init__(self, x, y, z, learnable, color, energy,
                  state_size, action_size, hidden_size, genome):
-        self.colors = ["blue", "green", "orange", "purple", "red", "teal", "violet", "yellow"]
+        self.colors = ["pink", "blue", "green", "orange", "purple", "red", "teal", "violet", "yellow"]
         self.start_energy = energy
         self.state_size = state_size
         self.action_size = action_size
@@ -276,11 +276,12 @@ class game_space:
                  predator_view_distance=5,
                  predator_kill_distance=2,
                  food_sources=30,
-                 food_spawns=10,
+                 food_spawns=15,
                  food_dist=7,
                  food_repro_energy=15,
                  food_start_energy=10,
-                 food_energy_growth=0.5,
+                 food_energy_growth=1,
+                 food_max_percent=0.05,
                  food_plant_success=0.5,
                  pheromone_decay=0.90,
                  min_reproduction_age=50,
@@ -339,6 +340,7 @@ class game_space:
         self.food_start_energy = food_start_energy
         self.food_repro_energy = food_repro_energy
         self.food_energy_growth = food_energy_growth
+        self.food_max_percent = food_max_percent
         self.food_plant_success = food_plant_success
         self.pheromone_decay = pheromone_decay
         self.pheromones = []
@@ -524,11 +526,14 @@ class game_space:
         xpos = random.random()*self.area_size
         ypos = random.random()*self.area_size
         zpos = -1
+        color = 0
+        if learner == False:
+            color = 1
         a = Agent(xpos,
                   ypos,
                   zpos,
                   learner,
-                  0,
+                  color,
                   self.agent_start_energy,
                   self.state_size,
                   self.action_size,
@@ -1431,7 +1436,7 @@ class game_space:
         for index, f in enumerate(self.food):
             self.food[index].energy += growth
             if self.food[index].energy >= self.food_repro_energy:
-                if len(self.food) < 0.02*(self.area_size**2):
+                if len(self.food) < self.food_max_percent*(self.area_size**2):
                     self.spawn_new_food(self.food[index].xpos, self.food[index].ypos)
                     self.food[index].energy = self.food_start_energy
                 else:
