@@ -257,7 +257,7 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[64],
+                 hidden_size=[16],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=500,
@@ -279,7 +279,7 @@ class game_space:
                  food_spawns=10,
                  food_dist=7,
                  food_repro_energy=15,
-                 food_start_energy=10,
+                 food_start_energy=7,
                  food_energy_growth=0.1,
                  food_plant_success=0.5,
                  pheromone_decay=0.90,
@@ -296,6 +296,7 @@ class game_space:
         self.steps = 1
         self.spawns = 0
         self.resets = 0
+        self.rebirths = 0
         self.births = 0
         self.deaths = 0
         self.eaten = 0
@@ -833,6 +834,7 @@ class game_space:
                     if mpf < pfm * 0.75:
                         g = self.make_new_genome()
                         self.agents[index].set_genome(g)
+                        self.rebirths += 1
 
     def reset_agents(self, reset):
         for index in reset:
@@ -1655,6 +1657,7 @@ class game_space:
         msg += "Spawns: " + str(self.spawns)
         msg += "  resets: " + str(self.resets)
         msg += "  births: " + str(self.births)
+        msg += "  rebirths: " + str(self.rebirths)
         msg += "  deaths: " + str(self.deaths)
         msg += "  eaten: " + str(self.eaten)
         msg += "\n"
