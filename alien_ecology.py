@@ -266,8 +266,8 @@ class game_space:
                  evaluate_learner_every=10,
                  mutation_rate=0.001,
                  area_size=50,
-                 year_length=10*50,
-                 day_length=10,
+                 year_period=10*50,
+                 day_period=10,
                  weather_harshness=0,
                  num_agents=20,
                  agent_start_energy=200,
@@ -324,8 +324,8 @@ class game_space:
         self.num_prev_states = num_prev_states
         self.environment_temperature = 20
         self.area_size = area_size
-        self.year_length = year_length
-        self.day_length = day_length
+        self.year_period = year_period
+        self.day_period = day_period
         self.weather_harshness = weather_harshness
         self.num_agents = num_agents
         self.agent_max_inventory = agent_max_inventory
@@ -681,15 +681,15 @@ class game_space:
 ########################
 
     def set_environment_visibility(self):
-        osc = np.sin(self.steps/self.day_length)
+        osc = np.sin(self.steps/self.day_period)
         self.agent_view_distance = 3.5 + (1.5*osc)
         self.visible_area = math.pi*(self.agent_view_distance**2)
 
     def set_environment_temperature(self):
-        osc = np.sin(self.steps/self.year_length)
+        osc = np.sin(self.steps/self.year_period)
         # Climate change modifies osc multiplier and/or initial value
-        osc2 = np.sin(2*self.steps/(self.year_length*10))
-        osc3 = np.sin(3*(self.steps+self.year_length*5)/(self.year_length*10))
+        osc2 = np.sin(2*self.steps/(self.year_period*10))
+        osc3 = np.sin(3*(self.steps+self.year_period*5)/(self.year_period*10))
         v1 = 14 + self.weather_harshness + osc3
         v2 = 12 + self.weather_harshness + osc2
         # Max temp: 38
@@ -845,9 +845,11 @@ class game_space:
                 if mpf < pfm * 0.75:
                     g = None
                     if method == 1:
-                        g = self.make_genome_from_store()
+                        num_g = min(len(self.genome_store), int(self.genome_store_size * 0.1))
+                        g = random.choice(self.get_best_genomes_from_store(num_g))
                     else:
-                        g = self.make_genome_from_previous()
+                        num_g = min(len(self.previous_agents), int(self.num_previous_agents * 0.1))
+                        g = random.choice(self.get_best_previous_genomes(num_g))
                     if g is not None and len(g) == self.genome_size:
                         self.agents[index].set_genome(g)
                         self.rebirths += 1
@@ -1283,16 +1285,16 @@ class game_space:
         return np.sin((self.agents[index].age+(self.min_reproduction_age/2))/self.min_reproduction_age)
 
     def get_step_oscillator_day(self, index):
-        return np.sin(self.steps/self.day_length)
+        return np.sin(self.steps/self.day_period)
 
     def get_step_oscillator_day_offset(self, index):
-        return np.sin((self.steps+(self.day_length/2))/self.day_length)
+        return np.sin((self.steps+(self.day_period/2))/self.day_period)
 
     def get_step_oscillator_year(self, index):
-        return np.sin(self.steps/self.year_length)
+        return np.sin(self.steps/self.year_period)
 
     def get_step_oscillator_year_offset(self, index):
-        return np.sin((self.steps+(self.year_length/2))/self.year_length)
+        return np.sin((self.steps+(self.year_period/2))/self.year_period)
 
     def get_random_input(self, index):
         return random.uniform(-1, 1)
@@ -1754,8 +1756,8 @@ class game_space:
         msg += "  area size: " + str(self.area_size)
         msg += "  predators: " + str(self.num_predators)
         msg += "\n"
-        msg += "Year length: " + str(self.year_length*4)
-        msg += "  day length: " + str(self.day_length*4)
+        msg += "Year length: " + str(self.year_period*6)
+        msg += "  day length: " + str(self.day_period*6)
         msg += "  min reproduction age: " + str(self.min_reproduction_age)
         msg += "  min reproduction energy: " + str(self.min_reproduction_energy)
         msg += "\n"
@@ -1805,7 +1807,7 @@ def update():
     # Change background to reflect season and time of day
     tod = gs.agent_view_distance # 1-5
     tod = (tod+2)*0.05
-    osc = np.sin(gs.steps/gs.year_length)
+    osc = np.sin(gs.steps/gs.year_period)
     season = int(2 + (osc*2))
     c1 = int(100*tod)
     c2 = int(50*tod)
