@@ -297,6 +297,7 @@ class game_space:
         self.spawns = 0
         self.resets = 0
         self.rebirths = 0
+        self.continuations = 0
         self.births = 0
         self.deaths = 0
         self.eaten = 0
@@ -421,11 +422,11 @@ class game_space:
     def step(self):
         self.set_environment_visibility()
         self.set_environment_temperature()
+        self.apply_predator_physics()
+        self.run_predator_actions()
         self.set_agent_states()
         self.apply_agent_physics()
         self.run_agent_actions()
-        self.apply_predator_physics()
-        self.run_predator_actions()
         self.update_agent_status()
         self.update_pheromone_status()
         self.reproduce_food()
@@ -826,16 +827,33 @@ class game_space:
 
     def evaluate_learner(self, index):
         if len(self.agents[index].previous_fitness) >= self.evaluate_learner_every:
-            if len(self.previous_agents) >= self.evaluate_learner_every:
-                mpf = np.mean(self.agents[index].previous_fitness)
-                self.agents[index].previous_fitness = []
-                pf = [x[1] for x in self.previous_agents]
-                pfm = np.mean(pf)
-                if pfm > 0:
-                    if mpf < pfm * 0.75:
-                        g = self.make_new_genome()
+            mpf = np.mean(self.agents[index].previous_fitness)
+            pf = []
+            method = 0
+            if random.random() < self.use_genome_store:
+                method = 1
+            if method == 1:
+                if len(self.genome_store) > 1:
+                    pf = [x[self.fitness_index] for x in self.genome_store]
+            else:
+                if len(self.previous_agents) > 1:
+                    pf = [x[self.fitness_index] for x in self.previous_agents]
+            if len(pf) < 2:
+                return
+            self.agents[index].previous_fitness = []
+            pfm = np.mean(pf)
+            if pfm > 0:
+                if mpf < pfm * 0.75:
+                    g = None
+                    if method == 1:
+                        g = self.make_genome_from_store()
+                    else:
+                        g = self.make_genome_from_previous()
+                    if g is not None and len(g) == self.genome_size:
                         self.agents[index].set_genome(g)
                         self.rebirths += 1
+                else:
+                    self.continuations += 1
 
     def reset_agents(self, reset):
         for index in reset:
@@ -1669,6 +1687,7 @@ class game_space:
         msg += "  resets: " + str(self.resets)
         msg += "  births: " + str(self.births)
         msg += "  rebirths: " + str(self.rebirths)
+        msg += "  continuations: " + str(self.continuations)
         msg += "  deaths: " + str(self.deaths)
         msg += "  eaten: " + str(self.eaten)
         msg += "\n"
