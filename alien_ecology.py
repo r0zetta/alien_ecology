@@ -373,6 +373,7 @@ class game_space:
                              "adjacent_agent_count",
                              "mate_in_range",
                              "visible_predators",
+                             "surrounding_predators",
                              "previous_action",
                              "own_age",
                              "own_energy",
@@ -954,6 +955,15 @@ class game_space:
                     ret.append(i)
         return ret
 
+    def get_surrounding_predators(self, index):
+        xv = self.agents[index].xpos
+        yv = self.agents[index].ypos
+        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
+        predator_count = len(predators)
+        if predator_count > 0:
+            self.agents[index].happiness -= 1
+        return predator_count
+
     def get_visible_predators(self, index):
         xv, yv = self.get_viewpoint(index)
         predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
@@ -1022,10 +1032,11 @@ class game_space:
                 reset = []
                 self.eaten += len(victims)
                 for v in victims:
-                    if self.agents[v].learnable == True:
-                        reset.append(v)
-                    else:
-                        dead.append(v)
+                    if v >= 0 and v < len(self.agents):
+                        if self.agents[v].learnable == True:
+                            reset.append(v)
+                        else:
+                            dead.append(v)
                     if len(reset) > 0:
                         self.reset_agents(reset)
                     if len(dead) > 0:
