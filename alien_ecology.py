@@ -145,10 +145,10 @@ class Predator:
         self.zpos = z
         self.xvel = 0
         self.yvel = 0
-        self.speed = 0.2
+        self.speed = 0.15
         self.visible = 5
         self.orient = 0 # 0-7 in 45 degree increments
-        self.inertial_damping = 0.70
+        self.inertial_damping = 0.60
 
 class Agent:
     def __init__(self, x, y, z, learnable, color, energy,
@@ -269,10 +269,10 @@ class game_space:
                  year_period=10*50,
                  day_period=10,
                  weather_harshness=0,
-                 num_agents=20,
-                 agent_start_energy=200,
+                 num_agents=30,
+                 agent_start_energy=250,
                  agent_max_inventory=10,
-                 num_predators=3,
+                 num_predators=5,
                  predator_view_distance=5,
                  predator_kill_distance=2,
                  food_sources=30,
@@ -289,7 +289,7 @@ class game_space:
                  reproduction_cost=0,
                  visuals=True,
                  reward_age_only=True,
-                 respawn_genome_store=0.5,
+                 respawn_genome_store=1,
                  rebirth_genome_store=1,
                  save_every=5000,
                  record_every=10,
@@ -1055,16 +1055,21 @@ class game_space:
                 dead = []
                 reset = []
                 self.eaten += len(victims)
-                for v in victims:
-                    if v >= 0 and v < len(self.agents):
+                try:
+                    for v in victims:
                         if self.agents[v].learnable == True:
                             reset.append(v)
                         else:
                             dead.append(v)
-                    if len(reset) > 0:
-                        self.reset_agents(reset)
-                    if len(dead) > 0:
-                        self.kill_agents(dead)
+                except:
+                    print(victims)
+                    sys.stdout.write('\a\a\a\a\a')
+                    sys.stdout.flush()
+                    sys.exit(0)
+                if len(reset) > 0:
+                    self.reset_agents(reset)
+                if len(dead) > 0:
+                    self.kill_agents(dead)
             orient = self.predators[index].orient
             distance = self.predator_view_distance
             xv, yv = self.viewpoint(xpos, ypos, orient, distance)
@@ -1494,7 +1499,8 @@ class game_space:
 # Routines related to genetic algorithms
 ########################################
     def make_random_genome(self):
-        genome = np.random.uniform(-1, 1, self.genome_size)
+        #genome = np.random.uniform(-1, 1, self.genome_size)
+        genome = np.random.randint(-1, 2, self.genome_size)
         return genome
 
     def make_random_genomes(self, num):
