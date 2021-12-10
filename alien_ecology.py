@@ -263,7 +263,7 @@ class game_space:
                  num_previous_agents=500,
                  genome_store_size=500,
                  learners=0.50,
-                 evaluate_learner_every=30,
+                 evaluate_learner_every=10,
                  mutation_rate=0.001,
                  area_size=50,
                  year_length=10*50,
@@ -838,8 +838,6 @@ class game_space:
             else:
                 if len(self.previous_agents) > 1:
                     pfm = np.mean([x[self.fitness_index] for x in self.previous_agents])
-            if len(pf) < 2:
-                return
             self.agents[index].previous_stats = []
             if pfm > 0:
                 if mpf < pfm * 0.75:
@@ -1752,6 +1750,7 @@ class game_space:
         msg += "Starting agents: " + str(self.num_agents)
         msg += "  learners: " + "%.2f"%(self.learners*self.num_agents)
         msg += "  area size: " + str(self.area_size)
+        msg += "  predators: " + str(self.num_predators)
         msg += "\n"
         msg += "Year length: " + str(self.year_length*4)
         msg += "  day length: " + str(self.day_length*4)
