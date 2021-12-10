@@ -170,7 +170,7 @@ class Agent:
         self.model = GN_model(self.weights, self.learnable)
         self.state = None
         self.entity = None
-        self.previous_fitness = []
+        self.previous_stats = []
         self.reset()
 
     def make_weights(self):
@@ -826,22 +826,21 @@ class game_space:
             return None, None
 
     def evaluate_learner(self, index):
-        if len(self.agents[index].previous_fitness) >= self.evaluate_learner_every:
-            mpf = np.mean(self.agents[index].previous_fitness)
-            pf = []
+        if len(self.agents[index].previous_stats) >= self.evaluate_learner_every:
+            mpf = np.mean([x[self.fitness_index] for x in self.agents[index].previous_stats])
+            pfm = 0
             method = 0
             if random.random() < self.use_genome_store:
                 method = 1
             if method == 1:
                 if len(self.genome_store) > 1:
-                    pf = [x[self.fitness_index] for x in self.genome_store]
+                    pfm = np.mean([x[self.fitness_index] for x in self.genome_store])
             else:
                 if len(self.previous_agents) > 1:
-                    pf = [x[self.fitness_index] for x in self.previous_agents]
+                    pfm = np.mean([x[self.fitness_index] for x in self.previous_agents])
             if len(pf) < 2:
                 return
-            self.agents[index].previous_fitness = []
-            pfm = np.mean(pf)
+            self.agents[index].previous_stats = []
             if pfm > 0:
                 if mpf < pfm * 0.75:
                     g = None
@@ -870,7 +869,7 @@ class game_space:
             entry = [g, f, a, h, d, l]
             self.store_genome(entry)
             self.add_previous_agent(entry)
-            self.agents[index].previous_fitness.append(f)
+            self.agents[index].previous_stats.append(entry)
             self.evaluate_learner(index)
             self.deaths += 1
             self.resets += 1
