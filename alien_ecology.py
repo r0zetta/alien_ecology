@@ -290,7 +290,7 @@ class game_space:
                  reward_age_only=True,
                  use_genome_store=0.5,
                  save_every=5000,
-                 record_every=10,
+                 record_every=50,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
         self.steps = 1
@@ -840,7 +840,8 @@ class game_space:
             a = self.agents[index].age
             reward = a/self.agent_start_energy
             if self.reward_age_only == True:
-                self.agents[index].model.rewards[-1] = reward
+                if len(self.agents[index].model.rewards) > 0:
+                    self.agents[index].model.rewards[-1] = reward
             h = self.agents[index].happiness
             d = self.agents[index].distance_travelled
             f = a + h + d
