@@ -271,7 +271,7 @@ class game_space:
                  num_previous_agents=500,
                  genome_store_size=500,
                  top_n=0.2,
-                 learners=0.50,
+                 learners=0.25,
                  evaluate_learner_every=50,
                  use_genome_type=0,
                  mutation_rate=0.001,
@@ -279,7 +279,7 @@ class game_space:
                  year_period=10*300,
                  day_period=10,
                  weather_harshness=0,
-                 num_agents=2,
+                 num_agents=30,
                  agent_start_energy=250,
                  agent_max_inventory=10,
                  num_predators=3,
@@ -303,7 +303,7 @@ class game_space:
                  respawn_genome_store=0,
                  rebirth_genome_store=1,
                  save_every=5000,
-                 record_every=10,
+                 record_every=50,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
         self.steps = 1
@@ -374,6 +374,7 @@ class game_space:
             self.recent_actions[t] = deque()
         self.actions = ["rotate_right",
                         "rotate_left",
+                        "flip",
                         "propel",
                         "pick_food",
                         "drop_food",
@@ -1126,6 +1127,12 @@ class game_space:
             self.agents[index].orient = 7
         return 0
 
+    def action_flip(self, index):
+        self.agents[index].orient += 4
+        if self.agents[index].orient > 7:
+            self.agents[index].orient -= 7
+        return 0
+
     def action_propel(self, index):
         orient = self.agents[index].orient
         speed = self.agents[index].speed
@@ -1260,10 +1267,10 @@ class game_space:
         return self.agents[index].prev_action
 
     def get_own_age(self, index):
-        return self.agents[index].age * 0.1
+        return self.agents[index].age
 
     def get_own_energy(self, index):
-        return self.agents[index].energy * 0.1
+        return self.agents[index].energy
 
     def get_own_temperature(self, index):
         return self.agents[index].temperature
@@ -1272,16 +1279,16 @@ class game_space:
         return self.agents[index].food_inventory
 
     def get_distance_moved(self, index):
-        return self.agents[index].distance_travelled * 0.1
+        return self.agents[index].distance_travelled
 
     def get_own_happiness(self, index):
-        return self.agents[index].happiness * 0.1
+        return self.agents[index].happiness
 
     def get_own_xposition(self, index):
-        return self.agents[index].xpos / self.area_size
+        return self.agents[index].xpos
 
     def get_own_yposition(self, index):
-        return self.agents[index].ypos / self.area_size
+        return self.agents[index].ypos
 
     def get_own_orientation(self, index):
         return (self.agents[index].orient - 4) / 4
@@ -1452,7 +1459,7 @@ class game_space:
             self.food[index].energy += growth
             if self.food[index].energy >= self.food_repro_energy:
                 if len(self.food) < self.food_max_percent*(self.area_size**2):
-                    self.spawn_new_food(self.food[index].xpos, self.food[index].ypos)
+                    self.spawn_new_food_in_radius(self.food[index].xpos, self.food[index].ypos)
                     self.food[index].energy = self.food_start_energy
                 else:
                     self.food[index].energy = self.food_repro_energy
@@ -1484,7 +1491,7 @@ class game_space:
             self.set_berry_entity(fi)
         return True
 
-    def spawn_new_food(self, xpos, ypos):
+    def spawn_new_food_in_radius(self, xpos, ypos):
         z = -1
         x = xpos + random.uniform(xpos-self.food_dist, xpos+self.food_dist)
         if x < 0:
@@ -1498,6 +1505,15 @@ class game_space:
             y -= self.area_size
         f = Food(x, y, z, self.food_start_energy)
         if self.is_food_on_this_plot(x, y) == False:
+            self.food.append(f)
+            if self.visuals == True:
+                fi = len(self.food)-1
+                self.set_food_entity(fi)
+
+    def spawn_new_food_at_location(self, xpos, ypos):
+        z = -1
+        f = Food(xpos, ypos, z, self.food_start_energy)
+        if self.is_food_on_this_plot(xpos, ypos) == False:
             self.food.append(f)
             if self.visuals == True:
                 fi = len(self.food)-1
@@ -1587,7 +1603,7 @@ class game_space:
                     if random.random() < self.food_plant_success:
                         xpos = self.berries[index].xpos
                         ypos = self.berries[index].ypos
-                        self.spawn_new_food(xpos, ypos)
+                        self.spawn_new_food_at_location(xpos, ypos)
                 to_remove.append(index)
         if len(to_remove) > 0:
             for index in to_remove:
@@ -1899,10 +1915,8 @@ class game_space:
         msg += "  genome size: " + str(self.genome_size)
         msg += "\n\n"
         msg += "Step: " + str(self.steps)
-        msg += "\n"
-        msg += "Food: " + str(num_food) + "  energy: " + str(food_energy)
-        msg += "\n"
-        msg += "Agents: " + str(num_agents)
+        msg += "  Food: " + str(num_food) + "  energy: " + str(food_energy)
+        msg += "  Agents: " + str(num_agents)
         msg += "  learning: " + str(l_agents)
         msg += "  evolving: " + str(e_agents)
         msg += "\n\n"
