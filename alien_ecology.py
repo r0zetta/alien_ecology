@@ -61,7 +61,7 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-4)
             self.reset()
 
     def num_params(self):
@@ -262,17 +262,18 @@ class game_space:
                  num_recent_actions=1000,
                  num_previous_agents=500,
                  genome_store_size=500,
-                 learners=0.75,
-                 evaluate_learner_every=30,
+                 learners=0.50,
+                 evaluate_learner_every=50,
+                 use_genome_type=0,
                  mutation_rate=0.001,
-                 area_size=50,
-                 year_period=10*100,
+                 area_size=80,
+                 year_period=10*300,
                  day_period=10,
                  weather_harshness=0,
                  num_agents=20,
-                 agent_start_energy=200,
+                 agent_start_energy=250,
                  agent_max_inventory=10,
-                 num_predators=5,
+                 num_predators=3,
                  predator_view_distance=5,
                  predator_kill_distance=2,
                  food_sources=40,
@@ -315,6 +316,7 @@ class game_space:
         self.learners = learners
         self.reward_age_only = reward_age_only
         self.evaluate_learner_every = evaluate_learner_every
+        self.use_genome_type = use_genome_type
         self.visuals = visuals
         self.savedir = savedir
         self.statsdir = statsdir
@@ -851,10 +853,10 @@ class game_space:
                     g = None
                     if method == 1:
                         num_g = min(len(self.genome_store), int(self.genome_store_size * 0.1))
-                        g = random.choice(self.get_best_genomes_from_store(num_g))
+                        g = random.choice(self.get_best_genomes_from_store(num_g, None))
                     else:
                         num_g = min(len(self.previous_agents), int(self.num_previous_agents * 0.1))
-                        g = random.choice(self.get_best_previous_genomes(num_g))
+                        g = random.choice(self.get_best_previous_genomes(num_g, None))
                     if g is not None and len(g) == self.genome_size:
                         self.agents[index].set_genome(g)
                         self.rebirths += 1
@@ -912,7 +914,7 @@ class game_space:
         if len(self.agents) < self.num_agents:
             deficit = self.num_agents - len(self.agents)
             for _ in range(deficit):
-                genome = self.make_new_genome()
+                genome = self.make_new_genome(0)
                 self.spawn_evolving_agent(genome)
 
     def update_agent_status(self):
@@ -1434,9 +1436,9 @@ class game_space:
     def reproduce_food(self):
         growth = random.random()*self.food_energy_growth
         if self.environment_temperature < 5:
-            growth = -1.2 * growth
+            growth = -1.2
         if self.environment_temperature > 35:
-            growth = -1.2 * growth
+            growth = -1.2
         dead = []
         for index, f in enumerate(self.food):
             self.food[index].energy += growth
@@ -1544,39 +1546,57 @@ class game_space:
             self.previous_agents.popleft()
         self.previous_agents.append(entry)
 
-    def get_best_previous_agents(self, num):
-        fitness = [x[self.fitness_index] for x in self.previous_agents]
-        indices = np.argpartition(fitness,-num)[-num:]
+    def get_best_previous_agents(self, num, atype):
+        fitness = []
+        if atype is not None:
+            fitness = [x[self.fitness_index] for x in self.previous_agents if x[5]==atype]
+        else:
+            fitness = [x[self.fitness_index] for x in self.previous_agents]
+        indices = []
+        if len(fitness) > num:
+            indices = np.argpartition(fitness,-num)[-num:]
         return indices
 
-    def get_best_previous_genomes(self, num):
-        indices = self.get_best_previous_agents(num)
+    def get_best_previous_genomes(self, num, atype):
+        indices = self.get_best_previous_agents(num, atype)
         genomes = [self.previous_agents[i][0] for i in indices]
         return genomes
 
-    def make_genome_from_previous(self):
+    def make_genome_from_previous(self, atype):
         num_g = int(self.num_previous_agents * 0.1)
         if len(self.previous_agents) < num_g:
             return self.make_random_genome()
-        genomes = self.get_best_previous_genomes(num_g)
-        return self.make_new_offspring(genomes)
+        genomes = self.get_best_previous_genomes(num_g, atype)
+        if len(genomes) > 0:
+            return self.make_new_offspring(genomes)
+        else:
+            return self.make_random_genome()
 
-    def get_best_agents_from_store(self, num):
-        fitness = [x[self.fitness_index] for x in self.genome_store]
-        indices = np.argpartition(fitness,-num)[-num:]
+    def get_best_agents_from_store(self, num, atype):
+        fitness = []
+        if atype is not None:
+            fitness = [x[self.fitness_index] for x in self.genome_store if x[5]==atype]
+        else:
+            fitness = [x[self.fitness_index] for x in self.genome_store]
+        indices = []
+        if len(fitness) > num:
+            indices = np.argpartition(fitness,-num)[-num:]
         return indices
 
-    def get_best_genomes_from_store(self, num):
-        indices = self.get_best_agents_from_store(num)
+    def get_best_genomes_from_store(self, num, atype):
+        indices = self.get_best_agents_from_store(num, atype)
         genomes = [self.genome_store[i][0] for i in indices]
         return genomes
 
-    def make_genome_from_store(self):
+    def make_genome_from_store(self, atype):
         num_g = int(self.genome_store_size * 0.1)
         if len(self.genome_store) < num_g:
             return self.make_random_genome()
-        genomes = self.get_best_genomes_from_store(num_g)
-        return self.make_new_offspring(genomes)
+        genomes = self.get_best_genomes_from_store(num_g, atype)
+        if len(genomes) > 0:
+            return self.make_new_offspring(genomes)
+        else:
+            return self.make_random_genome()
 
     def store_genome(self, entry):
         min_fitness = 0
@@ -1591,11 +1611,11 @@ class game_space:
                 self.genome_store.pop(min_item)
             self.genome_store.append(entry)
 
-    def make_new_genome(self):
+    def make_new_genome(self, atype):
         if random.random() < self.respawn_genome_store:
-            return self.make_genome_from_store()
+            return self.make_genome_from_store(atype)
         else:
-            return self.make_genome_from_previous()
+            return self.make_genome_from_previous(atype)
 
 
 
@@ -1742,7 +1762,7 @@ class game_space:
         bpae = 0
         pss = int(self.num_previous_agents * 0.1)
         if len(self.previous_agents) > pss:
-            bpi = self.get_best_previous_agents(pss)
+            bpi = self.get_best_previous_agents(pss, None)
             bpal = sum([self.previous_agents[i][5] for i in bpi])
             bpae = pss - bpal
             bplp = (bpal/pss)*100
@@ -1753,7 +1773,7 @@ class game_space:
         gsae = 0
         gss = int(self.genome_store_size * 0.1)
         if len(self.genome_store) > gss:
-            gsi = self.get_best_agents_from_store(gss)
+            gsi = self.get_best_agents_from_store(gss, None)
             gsal = sum([self.genome_store[i][5] for i in gsi])
             gsae = gss - gsal
             gplp = (gsal/gss)*100
@@ -1886,7 +1906,6 @@ else:
 
 # To do:
 # move params into a config dict
-# - try initialization with 1, 0, -1
 # - measure effect of GA on training
 # - if GA has a neutral of positive effect, this shows that most of the agents
 # configure their parameters in a similar way
@@ -1901,6 +1920,7 @@ else:
 # Different hidden values: [16], [64], [32, 32]
 # Hybrid with and without mating
 
+# handle dropped food as berries, which have a chance to turn into plants
 # - how about flaggelae instead of turn and move?
 # longer flaggelae mean more inertial damping, but greater "visibility"
 # - queens?
