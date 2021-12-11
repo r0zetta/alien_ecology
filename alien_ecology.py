@@ -1147,23 +1147,31 @@ class game_space:
         carrying = self.agents[index].food_inventory
         if carrying >= self.agent_max_inventory:
             self.agents[index].happiness -= 5
-            return -1
-        reward = 0
+            return 0
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
-        fi, val = self.get_nearest_food(xpos, ypos)
+        bi, bval = self.get_nearest_berry(xpos, ypos)
+        if bi is not None:
+            if bval <= 1:
+                picked = True
+                self.agents[index].happiness += 20
+                self.food_picked += 1
+                self.agents[index].food_inventory += 1
+                self.remove_berry(bi)
+                return 1
+        fi, fval = self.get_nearest_food(xpos, ypos)
         if fi is not None:
-            if val <= 1:
+            if fval <= 1:
+                picked = True
                 self.agents[index].happiness += 20
                 self.food_picked += 1
                 self.agents[index].food_inventory += 1
                 self.food[fi].energy -= 5
                 if self.food[fi].energy < 0:
                     self.remove_food(fi)
-                reward = 1
-            else:
-                self.agents[index].happiness -= 1
-        return reward
+                return 1
+        self.agents[index].happiness -= 1
+        return 0
 
     def action_eat_food(self, index):
         reward = 0
