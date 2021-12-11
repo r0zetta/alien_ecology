@@ -230,6 +230,14 @@ class Food:
         self.energy = random.randint(2, energy+2)
         self.entity = None
 
+class Berry:
+    def __init__(self, x, y, z):
+        self.xpos = x
+        self.ypos = y
+        self.zpos = z
+        self.age = 0
+        self.entity = None
+
 class Pheromone:
     def __init__(self, x, y, z):
         self.xpos = x
@@ -262,21 +270,22 @@ class game_space:
                  num_recent_actions=1000,
                  num_previous_agents=500,
                  genome_store_size=500,
+                 top_n=0.2,
                  learners=0.50,
                  evaluate_learner_every=50,
                  use_genome_type=0,
                  mutation_rate=0.001,
-                 area_size=80,
+                 area_size=50,
                  year_period=10*300,
                  day_period=10,
                  weather_harshness=0,
-                 num_agents=20,
+                 num_agents=2,
                  agent_start_energy=250,
                  agent_max_inventory=10,
                  num_predators=3,
                  predator_view_distance=5,
                  predator_kill_distance=2,
-                 food_sources=40,
+                 food_sources=20,
                  food_spawns=15,
                  food_dist=7,
                  food_repro_energy=15,
@@ -284,6 +293,7 @@ class game_space:
                  food_energy_growth=2,
                  food_max_percent=0.05,
                  food_plant_success=0.5,
+                 berry_max_age=30,
                  pheromone_decay=0.90,
                  min_reproduction_age=50,
                  min_reproduction_energy=120,
@@ -306,13 +316,14 @@ class game_space:
         self.eaten = 0
         self.food_picked = 0
         self.food_eaten = 0
-        self.food_planted = 0
+        self.food_dropped = 0
         self.num_recent_actions = num_recent_actions
         self.num_previous_agents = num_previous_agents
         self.fitness_index = 2 # 1: fitness, 2: age
         self.respawn_genome_store = respawn_genome_store
         self.rebirth_genome_store = rebirth_genome_store
         self.genome_store_size = genome_store_size
+        self.top_n = top_n
         self.learners = learners
         self.reward_age_only = reward_age_only
         self.evaluate_learner_every = evaluate_learner_every
@@ -344,8 +355,10 @@ class game_space:
         self.food_energy_growth = food_energy_growth
         self.food_max_percent = food_max_percent
         self.food_plant_success = food_plant_success
+        self.berry_max_age = berry_max_age
         self.pheromone_decay = pheromone_decay
         self.pheromones = []
+        self.berries = []
         self.min_reproduction_age = min_reproduction_age
         self.min_reproduction_energy = min_reproduction_energy
         self.reproduction_cost = reproduction_cost
@@ -363,7 +376,7 @@ class game_space:
                         "rotate_left",
                         "propel",
                         "pick_food",
-                        #"plant_food",
+                        "drop_food",
                         "eat_food",
                         "mate",
                         "freq_up",
@@ -436,6 +449,7 @@ class game_space:
         self.update_agent_status()
         self.update_pheromone_status()
         self.reproduce_food()
+        self.update_berries()
         if self.save_every > 0:
             if self.steps % self.save_every == 0:
                 self.save_genomes()
@@ -852,10 +866,10 @@ class game_space:
                 if mpf < pfm * 0.75:
                     g = None
                     if method == 1:
-                        num_g = min(len(self.genome_store), int(self.genome_store_size * 0.1))
+                        num_g = min(len(self.genome_store), int(self.genome_store_size * self.top_n))
                         g = random.choice(self.get_best_genomes_from_store(num_g, None))
                     else:
-                        num_g = min(len(self.previous_agents), int(self.num_previous_agents * 0.1))
+                        num_g = min(len(self.previous_agents), int(self.num_previous_agents * self.top_n))
                         g = random.choice(self.get_best_previous_genomes(num_g, None))
                     if g is not None and len(g) == self.genome_size:
                         self.agents[index].set_genome(g)
@@ -1160,23 +1174,17 @@ class game_space:
             self.agents[index].happiness -= 1
         return reward
 
-    def action_plant_food(self, index):
+    def action_drop_food(self, index):
         reward = 0
         if self.agents[index].food_inventory > 0:
             xpos = self.agents[index].xpos
             ypos = self.agents[index].ypos
-            if random.random() <= self.food_plant_success:
-                success = self.plant_food(xpos, ypos)
-                if success == True:
-                    self.food_planted += 1
-                    self.agents[index].food_inventory -= 1
-                    self.agents[index].happiness += 5*(1/self.food_plant_success)
-                    reward = 1
-                else:
-                    self.agents[index].happiness -= 1
+            self.add_berry(xpos, ypos)
+            self.food_dropped += 1
+            self.agents[index].food_inventory -= 1
+            reward = 1
         else:
             self.agents[index].happiness -= 1
-            reward = -1
         return reward
 
     def action_mate(self, index):
@@ -1467,16 +1475,14 @@ class game_space:
                 return True
         return False
 
-    def plant_food(self, xpos, ypos):
+    def drop_food(self, xpos, ypos):
         z = -1
-        if self.is_food_on_this_plot(xpos, ypos) == False:
-            f = Food(xpos, ypos, z, self.food_start_energy)
-            self.food.append(f)
-            if self.visuals == True:
-                fi = len(self.food)-1
-                self.set_food_entity(fi)
-            return True
-        return False
+        f = Berry(xpos, ypos, z)
+        self.berries.append(f)
+        if self.visuals == True:
+            fi = len(self.berries)-1
+            self.set_berry_entity(fi)
+        return True
 
     def spawn_new_food(self, xpos, ypos):
         z = -1
@@ -1496,6 +1502,101 @@ class game_space:
             if self.visuals == True:
                 fi = len(self.food)-1
                 self.set_food_entity(fi)
+
+########################
+# Berry runtime routines
+########################
+    def set_berry_entity(self, index):
+        xabs = self.food[index].xpos
+        yabs = self.food[index].ypos
+        zabs = self.food[index].zpos
+        s = 1
+        texture = "textures/plum"
+        self.berries[index].entity = Entity(model='sphere',
+                                            color=color.white,
+                                            scale=(s,s,s),
+                                            position = (xabs, yabs, zabs),
+                                            texture=texture)
+
+    def get_berries_in_radius(self, xpos, ypos, radius):
+        ret = []
+        for i in range(len(self.berries)):
+            ax = self.berries[i].xpos
+            ay = self.berries[i].ypos
+            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
+                if self.distance(xpos, ypos, ax, ay) <= radius:
+                    ret.append(i)
+        return ret
+
+    def get_visible_berries(self, index):
+        xv, yv = self.get_viewpoint(index)
+        berries = self.get_berries_in_radius(xv, yv, self.agent_view_distance)
+        return len(berries)
+
+    def get_adjacent_berries(self, index):
+        xpos = self.agents[index].xpos
+        ypos = self.agents[index].ypos
+        berries = self.get_berries_in_radius(xpos, ypos, self.agent_view_distance)
+        return len(berries)
+
+    def get_berries_in_range(self, index):
+        ret = 0
+        xpos = self.agents[index].xpos
+        ypos = self.agents[index].ypos
+        berry_index, berry_distance = self.get_nearest_berry(xpos, ypos)
+        if berry_index is not None:
+            if berry_distance < 1:
+                ret = 1
+        return ret
+
+    def get_nearest_berry(self, xpos, ypos):
+        distances = []
+        for f in self.berries:
+            ax = f.xpos
+            ay = f.ypos
+            radius = self.agent_view_distance
+            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
+                distances.append(self.distance(xpos, ypos, ax, ay))
+        if len(distances) > 0:
+            shortest_index = np.argmin(distances)
+            shortest_value = distances[shortest_index]
+            return shortest_index, shortest_value
+        else:
+            return None, None
+
+    def remove_berry(self, index):
+        if self.visuals == True:
+            self.berry[index].entity.disable()
+            del(self.berry[index].entity)
+        self.berries.pop(index)
+
+    def add_berry(self, xpos, ypos):
+        zpos = -1
+        berry = Berry(xpos, ypos, zpos)
+        self.berries.append(berry)
+        if self.visuals == True:
+            index = len(self.berries)-1
+            self.set_berry_entity(index)
+
+    def update_berries(self):
+        to_remove = []
+        for index in range(len(self.berries)):
+            self.berries[index].age += 1
+            if self.berries[index].age > self.berry_max_age:
+                if self.environment_temperature > 7:
+                    if random.random() < self.food_plant_success:
+                        xpos = self.berries[index].xpos
+                        ypos = self.berries[index].ypos
+                        self.spawn_new_food(xpos, ypos)
+                to_remove.append(index)
+        if len(to_remove) > 0:
+            for index in to_remove:
+                if self.visuals == True:
+                    self.berries[index].entity.disable()
+                    del(self.berries[index].entity)
+            new_berries = [i for j, i in enumerate(self.berries) if j not in to_remove]
+            self.berries = new_berries
+
 
 ########################################
 # Routines related to genetic algorithms
@@ -1563,7 +1664,7 @@ class game_space:
         return genomes
 
     def make_genome_from_previous(self, atype):
-        num_g = int(self.num_previous_agents * 0.1)
+        num_g = int(self.num_previous_agents * self.top_n)
         if len(self.previous_agents) < num_g:
             return self.make_random_genome()
         genomes = self.get_best_previous_genomes(num_g, atype)
@@ -1589,7 +1690,7 @@ class game_space:
         return genomes
 
     def make_genome_from_store(self, atype):
-        num_g = int(self.genome_store_size * 0.1)
+        num_g = int(self.genome_store_size * self.top_n)
         if len(self.genome_store) < num_g:
             return self.make_random_genome()
         genomes = self.get_best_genomes_from_store(num_g, atype)
@@ -1709,7 +1810,7 @@ class game_space:
         msg = ""
         msg += "Food picked: " + str(self.food_picked)
         msg += "  eaten: " + str(self.food_eaten) 
-        msg += "  planted: " + str(self.food_planted)
+        msg += "  dropped: " + str(self.food_dropped)
         msg += "\n\n"
         return msg
 
@@ -1753,14 +1854,14 @@ class game_space:
         self.record_stats("food", num_food)
         self.record_stats("food picked", self.food_picked)
         self.record_stats("food eaten", self.food_eaten)
-        self.record_stats("food planted", self.food_planted)
+        self.record_stats("food dropped", self.food_dropped)
         food_energy = int(sum([x.energy for x in self.food]))
         self.record_stats("food energy", food_energy)
         gsitems = len(self.genome_store)
         mpf = np.mean([x[1] for x in self.previous_agents])
         bpal = 0
         bpae = 0
-        pss = int(self.num_previous_agents * 0.1)
+        pss = int(self.num_previous_agents * self.top_n)
         if len(self.previous_agents) > pss:
             bpi = self.get_best_previous_agents(pss, None)
             bpal = sum([self.previous_agents[i][5] for i in bpi])
@@ -1771,7 +1872,7 @@ class game_space:
             self.record_stats("evolved_in_top_prev", bpep)
         gsal = 0
         gsae = 0
-        gss = int(self.genome_store_size * 0.1)
+        gss = int(self.genome_store_size * self.top_n)
         if len(self.genome_store) > gss:
             gsi = self.get_best_agents_from_store(gss, None)
             gsal = sum([self.genome_store[i][5] for i in gsi])
