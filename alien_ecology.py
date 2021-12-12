@@ -886,15 +886,15 @@ class game_space:
         for index in reset:
             l = int(self.agents[index].learnable)
             a = self.agents[index].age
-            reward = a/self.agent_start_energy
-            if self.reward_age_only == True:
-                if len(self.agents[index].model.rewards) > 0:
-                    self.agents[index].model.rewards[-1] = reward
             h = self.agents[index].happiness
             d = self.agents[index].distance_travelled
             f = a + h + d
             g = self.agents[index].model.get_w()
             entry = [g, f, a, h, d, l]
+            if self.reward_age_only == True:
+                if len(self.agents[index].model.rewards) > 0:
+                    reward = entry[self.fitness_index]/self.agent_start_energy
+                    self.agents[index].model.rewards[-1] = reward
             self.store_genome(entry)
             self.add_previous_agent(entry)
             self.agents[index].previous_stats.append(entry)
