@@ -15,7 +15,8 @@ class Net(nn.Module):
         self.fc_layers = nn.ModuleList()
         for item in self.w:
             s1, s2, d = item
-            fc = nn.Linear(s1, s2, bias=False)
+            #fc = nn.Linear(s1, s2, bias=False)
+            fc = nn.Linear(s1, s2)
             fc.weight_data = d
             self.fc_layers.append(fc)
 
@@ -295,7 +296,7 @@ class game_space:
                  food_start_energy=10,
                  food_energy_growth=2,
                  food_max_percent=0.05,
-                 food_plant_success=0.3,
+                 food_plant_success=1,
                  berry_max_age=100,
                  pheromone_radius=5,
                  pheromone_decay=0.90,
@@ -305,8 +306,8 @@ class game_space:
                  visuals=True,
                  reward_age_only=True,
                  fitness_index=2, # 1: fitness, 2: age
-                 respawn_genome_store=0.1,
-                 rebirth_genome_store=0.9,
+                 respawn_genome_store=0.3,
+                 rebirth_genome_store=0.8,
                  save_every=5000,
                  record_every=50,
                  savedir="alien_ecology_save",
@@ -467,8 +468,8 @@ class game_space:
         self.create_predators()
 
     def step(self):
-        self.set_environment_visibility()
-        self.set_environment_temperature()
+        #self.set_environment_visibility()
+        #self.set_environment_temperature()
         self.apply_predator_physics()
         self.run_predator_actions()
         self.set_agent_states()
@@ -2035,6 +2036,8 @@ class game_space:
         self.record_stats("food picked", self.food_picked)
         self.record_stats("food eaten", self.food_eaten)
         self.record_stats("food dropped", self.food_dropped)
+        minv = np.mean([x.food_inventory for x in self.agents])
+        self.record_stats("mean inventory", minv)
         food_energy = int(sum([x.energy for x in self.food]))
         self.record_stats("food energy", food_energy)
         gsitems = len(self.genome_store)
@@ -2081,7 +2084,9 @@ class game_space:
         msg += "Step: " + str(self.steps)
         msg += "  Food: " + str(num_food)
         msg += "  berries: " + str(len(self.berries))
-        msg += "  Agents: " + str(num_agents)
+        msg += "  inventory: " + "%.2f"%minv
+        msg += "\n"
+        msg += "Agents: " + str(num_agents)
         msg += "  learning: " + str(l_agents)
         msg += "  evolving: " + str(e_agents)
         msg += "\n\n"
