@@ -265,7 +265,7 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[32],
+                 hidden_size=[64, 64],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=500,
@@ -275,11 +275,12 @@ class game_space:
                  evaluate_learner_every=50,
                  use_genome_type=0,
                  mutation_rate=0.001,
+                 integer_weights=False,
                  area_size=50,
                  year_period=10*300,
                  day_period=10,
                  weather_harshness=0,
-                 num_agents=30,
+                 num_agents=20,
                  agent_start_energy=250,
                  agent_max_inventory=10,
                  num_predators=3,
@@ -319,7 +320,7 @@ class game_space:
         self.food_dropped = 0
         self.num_recent_actions = num_recent_actions
         self.num_previous_agents = num_previous_agents
-        self.fitness_index = 2 # 1: fitness, 2: age
+        self.fitness_index = 1 # 1: fitness, 2: age
         self.respawn_genome_store = respawn_genome_store
         self.rebirth_genome_store = rebirth_genome_store
         self.genome_store_size = genome_store_size
@@ -328,6 +329,7 @@ class game_space:
         self.reward_age_only = reward_age_only
         self.evaluate_learner_every = evaluate_learner_every
         self.use_genome_type = use_genome_type
+        self.integer_weights = integer_weights
         self.visuals = visuals
         self.savedir = savedir
         self.statsdir = statsdir
@@ -1626,8 +1628,10 @@ class game_space:
 # Routines related to genetic algorithms
 ########################################
     def make_random_genome(self):
-        #genome = np.random.uniform(-1, 1, self.genome_size)
-        genome = np.random.randint(-1, 2, self.genome_size)
+        if self.integer_weights == False:
+            return np.random.uniform(-1, 1, self.genome_size)
+        else:
+            return np.random.randint(-1, 2, self.genome_size)
         return genome
 
     def make_random_genomes(self, num):
@@ -1654,8 +1658,11 @@ class game_space:
             indices = random.sample(range(len(g)), n)
             gm = g
             for index in indices:
-                #val = random.uniform(-1, 1)
-                val = random.randint(-1, 1)
+                val = 0
+                if self.integer_weights == False:
+                    val = random.uniform(-1, 1)
+                else:
+                    val = random.randint(-1, 1)
                 gm[index] = val
             new_genomes.append(gm)
         return new_genomes
