@@ -296,7 +296,7 @@ class game_space:
                  food_start_energy=10,
                  food_energy_growth=2,
                  food_max_percent=0.05,
-                 food_plant_success=1,
+                 food_plant_success=0.7,
                  berry_max_age=100,
                  pheromone_radius=5,
                  pheromone_decay=0.90,
@@ -410,6 +410,10 @@ class game_space:
                              #"visible_agents",
                              #"adjacent_agents",
                              #"adjacent_agent_count",
+                             "pheromone_up",
+                             "pheromone_right",
+                             "pheromone_down",
+                             "pheromone_left",
                              "agents_up",
                              "agents_right",
                              "agents_down",
@@ -1515,6 +1519,26 @@ class game_space:
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
         pheromones = self.get_pheromones_in_radius(xpos, ypos, self.pheromone_radius)
+        return(len(pheromones))
+
+    def get_pheromone_up(self, index):
+        xv, yv = self.get_viewpoint_up(index)
+        pheromones = self.get_pheromones_in_radius(xv, yv, self.pheromone_radius)
+        return(len(pheromones))
+
+    def get_pheromone_right(self, index):
+        xv, yv = self.get_viewpoint_right(index)
+        pheromones = self.get_pheromones_in_radius(xv, yv, self.pheromone_radius)
+        return(len(pheromones))
+
+    def get_pheromone_down(self, index):
+        xv, yv = self.get_viewpoint_down(index)
+        pheromones = self.get_pheromones_in_radius(xv, yv, self.pheromone_radius)
+        return(len(pheromones))
+
+    def get_pheromone_left(self, index):
+        xv, yv = self.get_viewpoint_left(index)
+        pheromones = self.get_pheromones_in_radius(xv, yv, self.pheromone_radius)
         return(len(pheromones))
 
 
