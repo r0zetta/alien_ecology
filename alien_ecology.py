@@ -265,8 +265,8 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[64],
-                 num_prev_states=2,
+                 hidden_size=[32],
+                 num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=500,
                  genome_store_size=500,
@@ -296,12 +296,12 @@ class game_space:
                  berry_max_age=30,
                  pheromone_decay=0.90,
                  min_reproduction_age=50,
-                 min_reproduction_energy=120,
-                 reproduction_cost=0,
+                 min_reproduction_energy=100,
+                 reproduction_cost=5,
                  visuals=True,
                  reward_age_only=True,
-                 respawn_genome_store=0,
-                 rebirth_genome_store=1,
+                 respawn_genome_store=0.1,
+                 rebirth_genome_store=0.9,
                  save_every=5000,
                  record_every=50,
                  savedir="alien_ecology_save",
@@ -380,10 +380,10 @@ class game_space:
                         "drop_food",
                         "eat_food",
                         "mate",
-                        "freq_up",
-                        "freq_down",
-                        "emit_pheromone",
-                        "move_random"]
+                        #"freq_up",
+                        #"freq_down",
+                        #"move_random",
+                        "emit_pheromone"]
         self.observations = ["visible_food",
                              "adjacent_food",
                              "food_in_range",
@@ -454,7 +454,7 @@ class game_space:
         if self.save_every > 0:
             if self.steps % self.save_every == 0:
                 self.save_genomes()
-        if self.steps % 100 == 0:
+        if self.steps % 500 == 0:
             self.save_stats()
         self.print_stats()
         self.steps += 1
