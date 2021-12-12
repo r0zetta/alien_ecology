@@ -266,18 +266,18 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[64, 64],
+                 hidden_size=[64, 128, 64],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=500,
                  genome_store_size=500,
                  top_n=0.2,
-                 learners=0.25,
+                 learners=0.5,
                  evaluate_learner_every=50,
                  use_genome_type=0,
                  mutation_rate=0.001,
                  integer_weights=False,
-                 weight_range=4,
+                 weight_range=1,
                  area_size=50,
                  year_period=10*300,
                  day_period=10,
@@ -304,6 +304,7 @@ class game_space:
                  reproduction_cost=5,
                  visuals=True,
                  reward_age_only=True,
+                 fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=0.1,
                  rebirth_genome_store=0.9,
                  save_every=5000,
@@ -323,7 +324,7 @@ class game_space:
         self.food_dropped = 0
         self.num_recent_actions = num_recent_actions
         self.num_previous_agents = num_previous_agents
-        self.fitness_index = 1 # 1: fitness, 2: age
+        self.fitness_index = fitness_index
         self.respawn_genome_store = respawn_genome_store
         self.rebirth_genome_store = rebirth_genome_store
         self.genome_store_size = genome_store_size
@@ -390,7 +391,7 @@ class game_space:
                         "propel_right",
                         "propel_down",
                         "propel_left",
-                        #"mate",
+                        "mate",
                         #"freq_up",
                         #"freq_down",
                         #"move_random",
@@ -730,7 +731,10 @@ class game_space:
 
     def set_environment_visibility(self):
         osc = np.sin(self.steps/self.day_period)
-        self.agent_view_distance = 3.5 + (1.5*osc)
+        # 2 - 5
+        #self.agent_view_distance = 3.5 + (1.5*osc)
+        # 4 - 8
+        self.agent_view_distance = 6.0 + (2.0*osc)
         self.visible_area = math.pi*(self.agent_view_distance**2)
 
     def set_environment_temperature(self):
@@ -1564,14 +1568,17 @@ class game_space:
         return(len(food) + len(b))
 
     def get_food_pickable(self, index):
-        ret = 0
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
         food_index, food_distance = self.get_nearest_food(xpos, ypos)
         if food_index is not None:
             if food_distance < 1:
-                ret = 1
-        return ret
+                return 1
+        berry_index, berry_distance = self.get_nearest_berry(xpos, ypos)
+        if berry_index is not None:
+            if berry_distance < 1:
+                return 1
+        return 0
 
     def get_nearest_food(self, xpos, ypos):
         distances = []
@@ -2179,6 +2186,7 @@ else:
 
 # To do:
 # add biases to model and genome
+# switch learners to A2C
 # move params into a config dict
 # - measure effect of GA on training
 # - if GA has a neutral of positive effect, this shows that most of the agents
