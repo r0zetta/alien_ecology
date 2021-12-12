@@ -1654,7 +1654,8 @@ class game_space:
             indices = random.sample(range(len(g)), n)
             gm = g
             for index in indices:
-                val = random.uniform(-1, 1)
+                #val = random.uniform(-1, 1)
+                val = random.randint(-1, 1)
                 gm[index] = val
             new_genomes.append(gm)
         return new_genomes
@@ -1684,8 +1685,10 @@ class game_space:
 
     def get_best_previous_genomes(self, num, atype):
         indices = self.get_best_previous_agents(num, atype)
-        genomes = [self.previous_agents[i][0] for i in indices]
-        return genomes
+        if len(indices) >= num:
+            return [self.previous_agents[i][0] for i in indices]
+        else:
+            return self.make_random_genomes(num)
 
     def make_genome_from_previous(self, atype):
         num_g = int(self.num_previous_agents * self.top_n)
@@ -1710,8 +1713,10 @@ class game_space:
 
     def get_best_genomes_from_store(self, num, atype):
         indices = self.get_best_agents_from_store(num, atype)
-        genomes = [self.genome_store[i][0] for i in indices]
-        return genomes
+        if len(indices) >= num:
+            return [self.genome_store[i][0] for i in indices]
+        else:
+            return self.make_random_genomes(num)
 
     def make_genome_from_store(self, atype):
         num_g = int(self.genome_store_size * self.top_n)
@@ -2043,7 +2048,6 @@ else:
 # Different hidden values: [16], [64], [32, 32]
 # Hybrid with and without mating
 
-# handle dropped food as berries, which have a chance to turn into plants
 # - how about flaggelae instead of turn and move?
 # longer flaggelae mean more inertial damping, but greater "visibility"
 # - queens?
