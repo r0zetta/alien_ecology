@@ -293,8 +293,9 @@ class game_space:
                  food_start_energy=10,
                  food_energy_growth=2,
                  food_max_percent=0.05,
-                 food_plant_success=0.5,
+                 food_plant_success=0.3,
                  berry_max_age=100,
+                 pheromone_radius=5,
                  pheromone_decay=0.90,
                  min_reproduction_age=50,
                  min_reproduction_energy=100,
@@ -358,6 +359,7 @@ class game_space:
         self.food_max_percent = food_max_percent
         self.food_plant_success = food_plant_success
         self.berry_max_age = berry_max_age
+        self.pheromone_radius = pheromone_radius
         self.pheromone_decay = pheromone_decay
         self.pheromones = []
         self.berries = []
@@ -1364,7 +1366,7 @@ class game_space:
         xabs = self.pheromones[index].xpos
         yabs = self.pheromones[index].ypos
         zabs = self.pheromones[index].zpos
-        s = self.agent_view_distance*2
+        s = self.pheromone_radius*2
         alpha = self.pheromones[index].strength/2
         self.pheromones[index].entity = Entity(model='sphere',
                                          color=color.rgba(102,51,0,alpha),
@@ -1392,13 +1394,13 @@ class game_space:
 
     def get_forward_pheromones(self, index):
         xv, yv = self.get_viewpoint(index)
-        pheromones = self.get_pheromones_in_radius(xv, yv, self.agent_view_distance)
+        pheromones = self.get_pheromones_in_radius(xv, yv, self.pheromone_radius)
         return(len(pheromones))
 
     def get_adjacent_pheromones(self, index):
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
-        pheromones = self.get_pheromones_in_radius(xpos, ypos, self.agent_view_distance)
+        pheromones = self.get_pheromones_in_radius(xpos, ypos, self.pheromone_radius)
         return(len(pheromones))
 
 
@@ -1532,9 +1534,9 @@ class game_space:
 # Berry runtime routines
 ########################
     def set_berry_entity(self, index):
-        xabs = self.food[index].xpos
-        yabs = self.food[index].ypos
-        zabs = self.food[index].zpos
+        xabs = self.berries[index].xpos
+        yabs = self.berries[index].ypos
+        zabs = self.berries[index].zpos
         s = 1
         texture = "textures/plum"
         self.berries[index].entity = Entity(model='sphere',
@@ -1608,7 +1610,7 @@ class game_space:
         for index in range(len(self.berries)):
             self.berries[index].age += 1
             if self.berries[index].age > self.berry_max_age:
-                if self.environment_temperature > 7:
+                if self.environment_temperature > 7 and self.environment_temperature < 35:
                     if random.random() < self.food_plant_success:
                         xpos = self.berries[index].xpos
                         ypos = self.berries[index].ypos
