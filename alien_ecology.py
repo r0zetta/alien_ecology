@@ -954,12 +954,19 @@ class game_space:
             f = a + h + d
             g = self.agents[index].model.get_w()
             entry = [g, f, a, h, d, l]
-            if self.reward_age_only == True:
-                if len(self.agents[index].model.rewards) > 0:
-                    reward = entry[self.fitness_index]/self.agent_start_energy
-                    self.agents[index].model.rewards[-1] = reward
+            a1 = 0
+            a2 = 0
+            if len(self.previous_agents) > 0:
+                a1 = np.mean([x[self.fitness_index] for x in self.previous_agents if x[5]==1])
             self.store_genome(entry)
             self.add_previous_agent(entry)
+            if len(self.previous_agents) > 0:
+                a2 = np.mean([x[self.fitness_index] for x in self.previous_agents if x[5]==1])
+            reward = (a2 - a1) * 100
+            if self.reward_age_only == True:
+                if len(self.agents[index].model.rewards) > 0:
+                    #reward = entry[self.fitness_index]/self.agent_start_energy
+                    self.agents[index].model.rewards[-1] = reward
             self.agents[index].previous_stats.append(entry)
             self.evaluate_learner(index)
             self.deaths += 1
