@@ -61,7 +61,7 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-4)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4)
             self.reset()
 
     def num_params(self):
@@ -281,7 +281,7 @@ class game_space:
                  day_period=10,
                  weather_harshness=0,
                  num_agents=20,
-                 agent_start_energy=250,
+                 agent_start_energy=200,
                  agent_max_inventory=10,
                  num_predators=3,
                  predator_view_distance=5,
@@ -294,7 +294,7 @@ class game_space:
                  food_energy_growth=2,
                  food_max_percent=0.05,
                  food_plant_success=0.5,
-                 berry_max_age=30,
+                 berry_max_age=100,
                  pheromone_decay=0.90,
                  min_reproduction_age=50,
                  min_reproduction_energy=100,
@@ -1199,7 +1199,6 @@ class game_space:
             self.add_berry(xpos, ypos)
             self.food_dropped += 1
             self.agents[index].food_inventory -= 1
-            reward = 1
         else:
             self.agents[index].happiness -= 1
         return reward
@@ -1365,7 +1364,7 @@ class game_space:
         xabs = self.pheromones[index].xpos
         yabs = self.pheromones[index].ypos
         zabs = self.pheromones[index].zpos
-        s = 2
+        s = self.agent_view_distance*2
         alpha = self.pheromones[index].strength/2
         self.pheromones[index].entity = Entity(model='sphere',
                                          color=color.rgba(102,51,0,alpha),
@@ -1592,8 +1591,8 @@ class game_space:
 
     def remove_berry(self, index):
         if self.visuals == True:
-            self.berry[index].entity.disable()
-            del(self.berry[index].entity)
+            self.berries[index].entity.disable()
+            del(self.berries[index].entity)
         self.berries.pop(index)
 
     def add_berry(self, xpos, ypos):
