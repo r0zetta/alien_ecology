@@ -957,11 +957,13 @@ class game_space:
             a1 = 0
             a2 = 0
             if len(self.previous_agents) > 0:
-                a1 = np.mean([x[self.fitness_index] for x in self.previous_agents if x[5]==1])
+                #a1 = np.mean([x[self.fitness_index] for x in self.previous_agents if x[5]==1])
+                a1 = np.mean([x[self.fitness_index] for x in self.previous_agents])
             self.store_genome(entry)
             self.add_previous_agent(entry)
             if len(self.previous_agents) > 0:
-                a2 = np.mean([x[self.fitness_index] for x in self.previous_agents if x[5]==1])
+                #a2 = np.mean([x[self.fitness_index] for x in self.previous_agents if x[5]==1])
+                a2 = np.mean([x[self.fitness_index] for x in self.previous_agents])
             reward = (a2 - a1) * 100
             if self.reward_age_only == True:
                 if len(self.agents[index].model.rewards) > 0:
