@@ -53,6 +53,7 @@ class Net(nn.Module):
                 num_actions = self.w[-1][1]
                 probs = self.forward(state)
                 action = np.random.choice(num_actions, p=np.squeeze(probs.detach().numpy()))
+                #action = np.argmax(probs)
                 return action
 
 class GN_model:
@@ -276,6 +277,7 @@ class game_space:
                  use_genome_type=0,
                  mutation_rate=0.001,
                  integer_weights=False,
+                 weight_range=4,
                  area_size=50,
                  year_period=10*300,
                  day_period=10,
@@ -331,6 +333,7 @@ class game_space:
         self.evaluate_learner_every = evaluate_learner_every
         self.use_genome_type = use_genome_type
         self.integer_weights = integer_weights
+        self.weight_range = weight_range
         self.visuals = visuals
         self.savedir = savedir
         self.statsdir = statsdir
@@ -376,50 +379,69 @@ class game_space:
         for t in self.agent_types:
             self.agent_actions[t] = Counter()
             self.recent_actions[t] = deque()
-        self.actions = ["rotate_right",
-                        "rotate_left",
-                        "flip",
-                        "propel",
-                        "pick_food",
-                        "drop_food",
+        self.actions = ["pick_food",
                         "eat_food",
-                        "mate",
+                        "drop_food",
+                        #"rotate_right",
+                        #"rotate_left",
+                        #"flip",
+                        #"propel",
+                        "propel_up",
+                        "propel_right",
+                        "propel_down",
+                        "propel_left",
+                        #"mate",
                         #"freq_up",
                         #"freq_down",
                         #"move_random",
                         "emit_pheromone"]
-        self.observations = ["visible_food",
-                             "adjacent_food",
-                             "food_in_range",
-                             "forward_pheromones",
-                             "adjacent_pheromones",
-                             "visible_agents",
-                             "adjacent_agents",
-                             "adjacent_agent_count",
+        self.observations = [
+                             #"visible_food",
+                             #"adjacent_food",
+                             "food_up",
+                             "food_right",
+                             "food_down",
+                             "food_left",
+                             "food_pickable",
+                             #"forward_pheromones",
+                             #"adjacent_pheromones",
+                             #"visible_agents",
+                             #"adjacent_agents",
+                             #"adjacent_agent_count",
+                             "agents_up",
+                             "agents_right",
+                             "agents_down",
+                             "agents_left",
                              "mate_in_range",
-                             "visible_predators",
-                             "surrounding_predators",
+                             #"visible_predators",
+                             #"surrounding_predators",
+                             "predators_up",
+                             "predators_right",
+                             "predators_down",
+                             "predators_left",
                              "previous_action",
-                             "own_age",
+                             "can_mate",
+                             #"own_age",
                              "own_energy",
                              "own_temperature",
-                             "distance_moved",
-                             "own_happiness",
+                             #"distance_moved",
+                             #"own_happiness",
                              "own_xposition",
                              "own_yposition",
-                             "own_orientation",
+                             #"own_orientation",
                              "own_xvelocity",
                              "own_yvelocity",
                              "food_inventory",
                              "environment_temperature",
-                             "visibility",
-                             "age_oscillator",
+                             #"visibility",
+                             #"age_oscillator",
                              "reproduction_oscillator",
-                             "step_oscillator_day",
-                             "step_oscillator_day_offset",
-                             "step_oscillator_year",
-                             "step_oscillator_year_offset",
-                             "random_input"]
+                             #"step_oscillator_day",
+                             #"step_oscillator_day_offset",
+                             #"step_oscillator_year",
+                             #"step_oscillator_year_offset",
+                             #"random_input"
+                             ]
         self.hidden_size = hidden_size
         self.action_size = len(self.actions)
         self.state_size = len(self.observations)*self.num_prev_states
@@ -792,6 +814,25 @@ class game_space:
                     ret.append(i)
         return ret
 
+    def get_viewpoint_in_direction(self, index, direction):
+        xpos = self.agents[index].xpos
+        ypos = self.agents[index].ypos
+        distance = self.agent_view_distance
+        xv, yv = self.viewpoint(xpos, ypos, direction, distance)
+        return xv, yv
+
+    def get_viewpoint_up(self, index):
+        return self.get_viewpoint_in_direction(index, 0)
+
+    def get_viewpoint_right(self, index):
+        return self.get_viewpoint_in_direction(index, 2)
+
+    def get_viewpoint_down(self, index):
+        return self.get_viewpoint_in_direction(index, 4)
+
+    def get_viewpoint_left(self, index):
+        return self.get_viewpoint_in_direction(index, 6)
+
     def get_viewpoint(self, index):
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
@@ -802,6 +843,26 @@ class game_space:
 
     def get_visible_agents(self, index):
         xv, yv = self.get_viewpoint(index)
+        agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance)
+        return(len(agents))
+
+    def get_agents_up(self, index):
+        xv, yv = self.get_viewpoint_up(index)
+        agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance)
+        return(len(agents))
+
+    def get_agents_right(self, index):
+        xv, yv = self.get_viewpoint_right(index)
+        agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance)
+        return(len(agents))
+
+    def get_agents_down(self, index):
+        xv, yv = self.get_viewpoint_down(index)
+        agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance)
+        return(len(agents))
+
+    def get_agents_left(self, index):
+        xv, yv = self.get_viewpoint_left(index)
         agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance)
         return(len(agents))
 
@@ -1017,6 +1078,26 @@ class game_space:
             self.agents[index].happiness -= 1
         return predator_count
 
+    def get_predators_up(self, index):
+        xv, yv = self.get_viewpoint_up(index)
+        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
+        return(len(predators))
+
+    def get_predators_right(self, index):
+        xv, yv = self.get_viewpoint_right(index)
+        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
+        return(len(predators))
+
+    def get_predators_down(self, index):
+        xv, yv = self.get_viewpoint_down(index)
+        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
+        return(len(predators))
+
+    def get_predators_left(self, index):
+        xv, yv = self.get_viewpoint_left(index)
+        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
+        return(len(predators))
+
     def predator_move_random(self, index):
         action = random.choice([0,1,2])
         if action == 0:
@@ -1146,6 +1227,27 @@ class game_space:
         self.agents[index].xvel = xv
         self.agents[index].yvel = yv
         return 0
+
+    def propel_agent_in_direction(self, index, direction):
+        speed = self.agents[index].speed
+        xvel = self.agents[index].xvel
+        yvel = self.agents[index].yvel
+        xv, yv = self.propel(xvel, yvel, direction, speed)
+        self.agents[index].xvel = xv
+        self.agents[index].yvel = yv
+        return 0
+
+    def action_propel_up(self, index):
+        return self.propel_agent_in_direction(index, 0)
+
+    def action_propel_right(self, index):
+        return self.propel_agent_in_direction(index, 2)
+
+    def action_propel_down(self, index):
+        return self.propel_agent_in_direction(index, 4)
+
+    def action_propel_left(self, index):
+        return self.propel_agent_in_direction(index, 6)
 
     def action_pick_food(self, index):
         carrying = self.agents[index].food_inventory
@@ -1279,6 +1381,13 @@ class game_space:
 
     def get_own_age(self, index):
         return self.agents[index].age
+
+    def get_can_mate(self, index):
+        ret = 0
+        if self.agents[index].age >= self.min_reproduction_age:
+            if self.agents[index].energy >= self.min_reproduction_energy:
+                ret = 1
+        return ret
 
     def get_own_energy(self, index):
         return self.agents[index].energy
@@ -1420,15 +1529,41 @@ class game_space:
     def get_visible_food(self, index):
         xv, yv = self.get_viewpoint(index)
         food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
-        return len(food)
+        b = self.get_berries_in_radius(xv, yv, self.agent_view_distance)
+        return(len(food) + len(b))
 
     def get_adjacent_food(self, index):
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
         food = self.get_food_in_radius(xpos, ypos, self.agent_view_distance)
-        return len(food)
+        b = self.get_berries_in_radius(xv, yv, self.agent_view_distance)
+        return(len(food) + len(b))
 
-    def get_food_in_range(self, index):
+    def get_food_up(self, index):
+        xv, yv = self.get_viewpoint_up(index)
+        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
+        b = self.get_berries_in_radius(xv, yv, self.agent_view_distance)
+        return(len(food) + len(b))
+
+    def get_food_right(self, index):
+        xv, yv = self.get_viewpoint_right(index)
+        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
+        b = self.get_berries_in_radius(xv, yv, self.agent_view_distance)
+        return(len(food) + len(b))
+
+    def get_food_down(self, index):
+        xv, yv = self.get_viewpoint_down(index)
+        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
+        b = self.get_berries_in_radius(xv, yv, self.agent_view_distance)
+        return(len(food) + len(b))
+
+    def get_food_left(self, index):
+        xv, yv = self.get_viewpoint_left(index)
+        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
+        b = self.get_berries_in_radius(xv, yv, self.agent_view_distance)
+        return(len(food) + len(b))
+
+    def get_food_pickable(self, index):
         ret = 0
         xpos = self.agents[index].xpos
         ypos = self.agents[index].ypos
@@ -1630,9 +1765,9 @@ class game_space:
 ########################################
     def make_random_genome(self):
         if self.integer_weights == False:
-            return np.random.uniform(-1, 1, self.genome_size)
+            return np.random.uniform(-1*self.weight_range, self.weight_range, self.genome_size)
         else:
-            return np.random.randint(-1, 2, self.genome_size)
+            return np.random.randint(-1*self.weight_range, self.weight_range+1, self.genome_size)
         return genome
 
     def make_random_genomes(self, num):
@@ -1661,9 +1796,9 @@ class game_space:
             for index in indices:
                 val = 0
                 if self.integer_weights == False:
-                    val = random.uniform(-1, 1)
+                    val = random.uniform(-1*self.weight_range, self.weight_range)
                 else:
-                    val = random.randint(-1, 1)
+                    val = random.randint(-1*self.weight_range, self.weight_range+1)
                 gm[index] = val
             new_genomes.append(gm)
         return new_genomes
@@ -2043,6 +2178,7 @@ else:
         gs.step()
 
 # To do:
+# add biases to model and genome
 # move params into a config dict
 # - measure effect of GA on training
 # - if GA has a neutral of positive effect, this shows that most of the agents
