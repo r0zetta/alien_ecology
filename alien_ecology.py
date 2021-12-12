@@ -384,10 +384,10 @@ class game_space:
         self.actions = ["pick_food",
                         "eat_food",
                         "drop_food",
-                        #"rotate_right",
-                        #"rotate_left",
-                        #"flip",
-                        #"propel",
+                        "rotate_right",
+                        "rotate_left",
+                        "flip",
+                        "propel",
                         "propel_up",
                         "propel_right",
                         "propel_down",
@@ -398,7 +398,7 @@ class game_space:
                         #"move_random",
                         "emit_pheromone"]
         self.observations = [
-                             #"visible_food",
+                             "visible_food",
                              #"adjacent_food",
                              "food_up",
                              "food_right",
@@ -407,7 +407,7 @@ class game_space:
                              "food_pickable",
                              #"forward_pheromones",
                              #"adjacent_pheromones",
-                             #"visible_agents",
+                             "visible_agents",
                              #"adjacent_agents",
                              #"adjacent_agent_count",
                              "pheromone_up",
@@ -419,7 +419,7 @@ class game_space:
                              "agents_down",
                              "agents_left",
                              "mate_in_range",
-                             #"visible_predators",
+                             "visible_predators",
                              #"surrounding_predators",
                              "predators_up",
                              "predators_right",
@@ -852,7 +852,7 @@ class game_space:
 
     def get_visible_agents(self, index):
         xv, yv = self.get_viewpoint(index)
-        agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance)
+        agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance*2)
         return(len(agents))
 
     def get_agents_up(self, index):
@@ -1081,7 +1081,7 @@ class game_space:
 
     def get_visible_predators(self, index):
         xv, yv = self.get_viewpoint(index)
-        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
+        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance*2)
         predator_count = len(predators)
         if predator_count > 0:
             self.agents[index].happiness -= 1
@@ -1345,7 +1345,12 @@ class game_space:
         self.create_new_pheromone(xpos, ypos)
 
     def action_move_random(self, index):
-        actions = ["action_rotate_right", "action_rotate_left", "action_propel"]
+        if "action_rotate_right" in self.actions:
+            actions = ["action_rotate_right", "action_rotate_left",
+                       "action_propel", "action_flip"]
+        else:
+            actions = ["action_propel_up", "action_propel_right",
+                       "action_propel_down", "action_propel_left"]
         choice = random.choice(actions)
         class_method = getattr(self, choice)
         return class_method(index)
@@ -1557,8 +1562,8 @@ class game_space:
 
     def get_visible_food(self, index):
         xv, yv = self.get_viewpoint(index)
-        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
-        b = self.get_berries_in_radius(xv, yv, self.agent_view_distance)
+        food = self.get_food_in_radius(xv, yv, self.agent_view_distance*2)
+        b = self.get_berries_in_radius(xv, yv, self.agent_view_distance*2)
         return(len(food) + len(b))
 
     def get_adjacent_food(self, index):
