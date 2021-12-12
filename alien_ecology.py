@@ -1888,6 +1888,7 @@ class game_space:
         agent_energy = int(sum([x.energy for x in self.agents]))
         self.record_stats("agent energy", agent_energy)
         num_food = len(self.food)
+        self.record_stats("berries", len(self.berries))
         self.record_stats("food", num_food)
         self.record_stats("food picked", self.food_picked)
         self.record_stats("food eaten", self.food_eaten)
@@ -1936,7 +1937,8 @@ class game_space:
         msg += "  genome size: " + str(self.genome_size)
         msg += "\n\n"
         msg += "Step: " + str(self.steps)
-        msg += "  Food: " + str(num_food) + "  energy: " + str(food_energy)
+        msg += "  Food: " + str(num_food)
+        msg += "  berries: " + str(len(self.berries))
         msg += "  Agents: " + str(num_agents)
         msg += "  learning: " + str(l_agents)
         msg += "  evolving: " + str(e_agents)
