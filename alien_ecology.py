@@ -423,18 +423,18 @@ class game_space:
         self.actions = ["pick_food",
                         "eat_food",
                         "drop_food",
-                        #"rotate_right",
-                        #"rotate_left",
-                        #"flip",
-                        #"propel",
+                        "rotate_right",
+                        "rotate_left",
+                        "flip",
+                        "propel",
                         #"null",
                         "propel_up",
                         "propel_right",
                         "propel_down",
                         "propel_left",
                         "mate",
-                        #"freq_up",
-                        #"freq_down",
+                        "freq_up",
+                        "freq_down",
                         #"move_random",
                         "emit_pheromone"]
         self.observations = ["food_up",
@@ -469,7 +469,7 @@ class game_space:
                              "own_yvelocity",
                              "food_inventory",
                              "environment_temperature",
-                             #"visibility",
+                             "visibility",
                              "reproduction_oscillator",
                              "distance_moved",
                              "own_happiness",
@@ -2191,8 +2191,8 @@ class game_space:
         msg += "\n"
         msg += self.make_labels(self.genome_store, "Genome store ", "gs")
         for atype in self.agent_types:
-            msg += self.print_action_dist(atype)
-            #self.print_action_dist(atype)
+            #msg += self.print_action_dist(atype)
+            self.print_action_dist(atype)
         return msg
 
     def print_stats(self):
