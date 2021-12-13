@@ -140,18 +140,6 @@ class GN_model:
             return True
         return False
 
-class Predator:
-    def __init__(self, x, y, z):
-        self.xpos = x
-        self.ypos = y
-        self.zpos = z
-        self.xvel = 0
-        self.yvel = 0
-        self.speed = 0.15
-        self.visible = 5
-        self.orient = 0 # 0-7 in 45 degree increments
-        self.inertial_damping = 0.60
-
 class Agent:
     def __init__(self, x, y, z, learnable, color, energy,
                  state_size, action_size, hidden_size, genome):
@@ -224,6 +212,18 @@ class Agent:
         else:
             return self.model.get_action(self.state)
 
+class Predator:
+    def __init__(self, x, y, z):
+        self.xpos = x
+        self.ypos = y
+        self.zpos = z
+        self.xvel = 0
+        self.yvel = 0
+        self.speed = 0.2
+        self.visible = 5
+        self.orient = 0 # 0-7 in 45 degree increments
+        self.inertial_damping = 0.70
+
 class Food:
     def __init__(self, x, y, z, energy):
         self.xpos = x
@@ -267,8 +267,8 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[32],
-                 num_prev_states=1,
+                 hidden_size=[32, 32],
+                 num_prev_states=2,
                  num_recent_actions=1000,
                  num_previous_agents=200,
                  genome_store_size=200,
@@ -285,7 +285,7 @@ class game_space:
                  num_agents=20,
                  agent_start_energy=200,
                  agent_max_inventory=10,
-                 num_predators=6,
+                 num_predators=10,
                  predator_view_distance=5,
                  predator_kill_distance=2,
                  food_sources=20,
@@ -304,9 +304,9 @@ class game_space:
                  reproduction_cost=5,
                  visuals=True,
                  reward_age_only=True,
-                 fitness_index=2, # 1: fitness, 2: age
-                 respawn_genome_store=0.8,
-                 rebirth_genome_store=0.8,
+                 fitness_index=1, # 1: fitness, 2: age
+                 respawn_genome_store=1.0,
+                 rebirth_genome_store=1.0,
                  save_every=5000,
                  record_every=50,
                  savedir="alien_ecology_save",
@@ -382,10 +382,10 @@ class game_space:
         self.actions = [#"pick_food",
                         #"eat_food",
                         #"drop_food",
-                        #"rotate_right",
-                        #"rotate_left",
+                        "rotate_right",
+                        "rotate_left",
                         #"flip",
-                        #"propel",
+                        "propel",
                         "null",
                         "propel_up",
                         "propel_right",
@@ -417,13 +417,13 @@ class game_space:
                              "predators_right",
                              "predators_down",
                              "predators_left",
-                             #"visible_predators",
+                             "visible_predators",
                              "previous_action",
                              #"own_energy",
                              #"own_temperature",
                              "own_xposition",
                              "own_yposition",
-                             #"own_orientation",
+                             "own_orientation",
                              "own_xvelocity",
                              "own_yvelocity",
                              #"food_inventory",
@@ -478,7 +478,7 @@ class game_space:
         if self.save_every > 0:
             if self.steps % self.save_every == 0:
                 self.save_genomes()
-        if self.steps % 500 == 0:
+        if self.save_every > 0 and self.steps % 500 == 0:
             self.save_stats()
         self.print_stats()
         self.steps += 1
@@ -955,18 +955,18 @@ class game_space:
             entry = [g, f, a, h, d, l]
             a1 = 0
             a2 = 0
-            if len(self.previous_agents) > 0:
-                #a1 = np.mean([x[self.fitness_index] for x in self.previous_agents if x[5]==1])
-                a1 = np.mean([x[self.fitness_index] for x in self.previous_agents])
+            store = self.previous_agents
+            if random.random() < self.rebirth_genome_store:
+                store = self.genome_store
+            if len(store) > 0:
+                a1 = np.mean([x[self.fitness_index] for x in store])
             self.store_genome(entry)
             self.add_previous_agent(entry)
-            if len(self.previous_agents) > 0:
-                #a2 = np.mean([x[self.fitness_index] for x in self.previous_agents if x[5]==1])
-                a2 = np.mean([x[self.fitness_index] for x in self.previous_agents])
+            if len(store) > 0:
+                a2 = np.mean([x[self.fitness_index] for x in store])
             reward = (a2 - a1) * 100
             if self.reward_age_only == True:
                 if len(self.agents[index].model.rewards) > 0:
-                    #reward = entry[self.fitness_index]/self.agent_start_energy
                     self.agents[index].model.rewards[-1] = reward
             self.agents[index].previous_stats.append(entry)
             self.evaluate_learner(index)
