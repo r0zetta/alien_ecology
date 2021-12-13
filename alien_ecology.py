@@ -202,10 +202,10 @@ class Agent:
                 if i+1 < len(self.hidden_size):
                     m1 = m3
                     m2 = m1 + (self.hidden_size[i] * self.hidden_size[i+1])
-                    m3 = m2 + self.hidden_size[i]
+                    m3 = m2 + self.hidden_size[i+1]
                     w = torch.Tensor(np.reshape(self.genome[m1:m2],
                                      (self.hidden_size[i], self.hidden_size[i+1])))
-                    b = torch.Tensor(np.reshape(self.genome[m2:m3], (self.hidden_size[i])))
+                    b = torch.Tensor(np.reshape(self.genome[m2:m3], (self.hidden_size[i+1])))
                     weights.append([self.hidden_size[i], self.hidden_size[i+1], w, b])
         m1 = m3
         m2 = m1 + self.action_size*self.hidden_size[-1]
@@ -340,8 +340,8 @@ class game_space:
                  berry_max_age=100,
                  pheromone_radius=5,
                  pheromone_decay=0.92,
-                 min_reproduction_age=100,
-                 min_reproduction_energy=150,
+                 min_reproduction_age=60,
+                 min_reproduction_energy=120,
                  reproduction_cost=10,
                  visuals=True,
                  reward_age_only=True,
@@ -491,7 +491,7 @@ class game_space:
             for i in range(len(self.hidden_size)):
                 if i+1 < len(self.hidden_size):
                     self.genome_size += self.hidden_size[i]*self.hidden_size[i+1]
-                    self.genome_size += self.hidden_size[i]
+                    self.genome_size += self.hidden_size[i+1]
         self.genome_size += self.action_size*self.hidden_size[-1]
         self.genome_size += self.hidden_size[-1]
         self.genome_size += self.hidden_size[-1]
@@ -2275,8 +2275,6 @@ else:
         gs.step()
 
 # To do:
-# add biases to model and genome
-# switch learners to A2C
 # move params into a config dict
 # - measure effect of GA on training
 # - if GA has a neutral of positive effect, this shows that most of the agents
@@ -2292,8 +2290,6 @@ else:
 # Different hidden values: [16], [64], [32, 32]
 # Hybrid with and without mating
 
-# - how about flaggelae instead of turn and move?
-# longer flaggelae mean more inertial damping, but greater "visibility"
 # - queens?
 # - add hunger
 # - add disease
