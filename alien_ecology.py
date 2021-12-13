@@ -16,8 +16,8 @@ class Net(nn.Module):
         self.fc_layers = nn.ModuleList()
         for item in self.w:
             s1, s2, d = item
-            #fc = nn.Linear(s1, s2, bias=False)
-            fc = nn.Linear(s1, s2)
+            fc = nn.Linear(s1, s2, bias=False)
+            #fc = nn.Linear(s1, s2)
             fc.weight.data = d
             self.fc_layers.append(fc)
 
@@ -25,7 +25,7 @@ class Net(nn.Module):
         for i in range(len(self.fc_layers)-2):
             x = F.relu(self.fc_layers[i](x))
         a = F.softmax(F.relu(self.fc_layers[-2](x)), dim=-1)
-        v = self.fc_layers[-1](x)
+        v = F.relu(self.fc_layers[-1](x))
         return a, v
 
     def get_w(self):
@@ -47,10 +47,7 @@ class Net(nn.Module):
         m = Categorical(probs)
         action = m.sample()
         prob = m.log_prob(action)
-        if self.l == True:
-            return action, value, prob
-        else:
-            return action
+        return action, value, prob
 
 class GN_model:
     def __init__(self, w, l=False):
@@ -75,14 +72,11 @@ class GN_model:
         return self.policy.set_w(w)
 
     def get_action(self, state):
+        action, value, log_prob = self.policy.get_action(state)
         if self.l == True:
-            action, value, log_prob = self.policy.get_action(state)
             self.probs.append(log_prob)
             self.values.append(value)
-            return action
-        else:
-            action = self.policy.get_action(state)
-            return action
+        return action
 
     def reset(self):
         self.rewards = []
@@ -300,14 +294,14 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[32, 32],
+                 hidden_size=[32],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=200,
                  genome_store_size=500,
                  top_n=0.2,
                  learners=0.5,
-                 evaluate_learner_every=50,
+                 evaluate_learner_every=30,
                  mutation_rate=0.005,
                  integer_weights=False,
                  weight_range=1,
@@ -332,14 +326,14 @@ class game_space:
                  berry_max_age=100,
                  pheromone_radius=5,
                  pheromone_decay=0.92,
-                 min_reproduction_age=50,
-                 min_reproduction_energy=90,
-                 reproduction_cost=5,
+                 min_reproduction_age=100,
+                 min_reproduction_energy=150,
+                 reproduction_cost=10,
                  visuals=True,
                  reward_age_only=True,
-                 fitness_index=1, # 1: fitness, 2: age
-                 respawn_genome_store=1.0,
-                 rebirth_genome_store=1.0,
+                 fitness_index=2, # 1: fitness, 2: age
+                 respawn_genome_store=0.8,
+                 rebirth_genome_store=0.8,
                  save_every=5000,
                  record_every=50,
                  savedir="alien_ecology_save",
@@ -415,11 +409,11 @@ class game_space:
         self.actions = ["pick_food",
                         "eat_food",
                         "drop_food",
-                        "rotate_right",
-                        "rotate_left",
-                        "flip",
-                        "propel",
-                        "null",
+                        #"rotate_right",
+                        #"rotate_left",
+                        #"flip",
+                        #"propel",
+                        #"null",
                         "propel_up",
                         "propel_right",
                         "propel_down",
@@ -1000,7 +994,7 @@ class game_space:
             self.add_previous_agent(entry)
             if len(store) > 0:
                 a2 = np.mean([x[self.fitness_index] for x in store])
-            reward = max(-1, (a2 - a1) * 100)
+            reward = max(-1, (a2 - a1) * 10)
             if reward == 0:
                 reward = a/self.agent_start_energy
             reward = np.float32(reward)
@@ -1052,15 +1046,14 @@ class game_space:
         for index in range(len(self.agents)):
             self.agents[index].age += 1
             self.set_agent_temperature(index)
-            energy_drain = 0
-            #energy_drain = 1
-            #temperature = self.agents[index].temperature
-            #if temperature > 30:
-            #    energy_drain += (temperature - 30) * 0.1
-            #    self.agents[index].happiness -= 1
-            #if temperature < 5:
-            #    energy_drain += (5 - temperature) * 0.1
-            #    self.agents[index].happiness -= 1
+            energy_drain = 1
+            temperature = self.agents[index].temperature
+            if temperature > 30:
+                energy_drain += (temperature - 30) * 0.1
+                self.agents[index].happiness -= 1
+            if temperature < 5:
+                energy_drain += (5 - temperature) * 0.1
+                self.agents[index].happiness -= 1
             self.agents[index].energy -= energy_drain
             if self.agents[index].energy <= 0:
                 if self.agents[index].learnable == False:
@@ -2092,17 +2085,34 @@ class game_space:
         msg += "\n\n"
         return msg
 
+    def print_run_stats(self):
+        msg = ""
+        msg += "Starting agents: " + str(self.num_agents)
+        msg += "  learners: " + "%.2f"%(self.learners*self.num_agents)
+        msg += "  area size: " + str(self.area_size)
+        msg += "  predators: " + str(self.num_predators)
+        msg += "\n"
+        msg += "Year length: " + str(self.year_period*6)
+        msg += "  day length: " + str(self.day_period*6)
+        msg += "  min reproduction age: " + str(self.min_reproduction_age)
+        msg += "  min reproduction energy: " + str(self.min_reproduction_energy)
+        msg += "\n"
+        msg += "Action size: " + str(self.action_size)
+        msg += "  state_size: " + str(self.state_size)
+        msg += "  hidden: " + str(self.hidden_size)
+        msg += "  genome size: " + str(self.genome_size)
+        msg += "\n\n"
+        return msg
+
     def get_stats(self):
-        num_agents = len(self.agents)
         l_agents = sum([x.learnable for x in self.agents])
         self.record_stats("learning agents", l_agents)
-        e_agents = num_agents - l_agents
+        e_agents = len(self.agents) - l_agents
         self.record_stats("evolving agents", l_agents)
         agent_energy = int(sum([x.energy for x in self.agents]))
         self.record_stats("agent energy", agent_energy)
-        num_food = len(self.food)
         self.record_stats("berries", len(self.berries))
-        self.record_stats("food", num_food)
+        self.record_stats("food", len(self.food))
         self.record_stats("food picked", self.food_picked)
         self.record_stats("food eaten", self.food_eaten)
         self.record_stats("food dropped", self.food_dropped)
@@ -2136,27 +2146,13 @@ class game_space:
             self.record_stats("evolved_in_top_gs", gpep)
 
         msg = ""
-        msg += "Starting agents: " + str(self.num_agents)
-        msg += "  learners: " + "%.2f"%(self.learners*self.num_agents)
-        msg += "  area size: " + str(self.area_size)
-        msg += "  predators: " + str(self.num_predators)
-        msg += "\n"
-        msg += "Year length: " + str(self.year_period*6)
-        msg += "  day length: " + str(self.day_period*6)
-        msg += "  min reproduction age: " + str(self.min_reproduction_age)
-        msg += "  min reproduction energy: " + str(self.min_reproduction_energy)
-        msg += "\n"
-        msg += "Action size: " + str(self.action_size)
-        msg += "  state_size: " + str(self.state_size)
-        msg += "  hidden: " + str(self.hidden_size)
-        msg += "  genome size: " + str(self.genome_size)
-        msg += "\n\n"
+        #msg += self.print_run_stats()
         msg += "Step: " + str(self.steps)
-        msg += "  Food: " + str(num_food)
+        msg += "  Food: " + str(len(self.food))
         msg += "  berries: " + str(len(self.berries))
         msg += "  inventory: " + "%.2f"%minv
         msg += "\n"
-        msg += "Agents: " + str(num_agents)
+        msg += "Agents: " + str(len(self.agents))
         msg += "  learning: " + str(l_agents)
         msg += "  evolving: " + str(e_agents)
         msg += "\n\n"
@@ -2175,8 +2171,8 @@ class game_space:
         msg += "\n"
         msg += self.make_labels(self.genome_store, "Genome store ", "gs")
         for atype in self.agent_types:
-            #msg += self.print_action_dist(atype)
-            self.print_action_dist(atype)
+            msg += self.print_action_dist(atype)
+            #self.print_action_dist(atype)
         return msg
 
     def print_stats(self):
