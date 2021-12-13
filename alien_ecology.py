@@ -45,7 +45,7 @@ class Net(nn.Module):
         for i, item in enumerate(self.w):
             s1, s2, d, b = item
             self.fc_layers[i].weight.data = d
-            self.fc_layers[i].bias.data = d
+            self.fc_layers[i].bias.data = b
 
     def get_action(self, state):
         probs, value = self.forward(state)
@@ -2166,7 +2166,7 @@ class game_space:
             self.record_stats("evolved_in_top_gs", gpep)
 
         msg = ""
-        #msg += self.print_run_stats()
+        msg += self.print_run_stats()
         msg += "Step: " + str(self.steps)
         msg += "  Food: " + str(len(self.food))
         msg += "  berries: " + str(len(self.berries))
