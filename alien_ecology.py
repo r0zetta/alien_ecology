@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torch.distributions import Categorical
 
 class Net(nn.Module):
     def __init__(self, w, l):
@@ -17,21 +18,20 @@ class Net(nn.Module):
             s1, s2, d = item
             #fc = nn.Linear(s1, s2, bias=False)
             fc = nn.Linear(s1, s2)
-            fc.weight_data = d
+            fc.weight.data = d
             self.fc_layers.append(fc)
 
     def forward(self, x):
-        for i in range(len(self.fc_layers)):
-            if i+1 < len(self.fc_layers):
-                x = F.relu(self.fc_layers[i](x))
-            else:
-                x = F.softmax(F.relu(self.fc_layers[i](x)), dim=-1)
-        return x
+        for i in range(len(self.fc_layers)-2):
+            x = F.relu(self.fc_layers[i](x))
+        a = F.softmax(F.relu(self.fc_layers[-2](x)), dim=-1)
+        v = self.fc_layers[-1](x)
+        return a, v
 
     def get_w(self):
         w = []
         for fc in self.fc_layers:
-            d = fc.weight_data.detach().numpy()
+            d = fc.weight.data.detach().numpy()
             d = list(np.ravel(d))
             w.extend(d)
         return w
@@ -43,19 +43,14 @@ class Net(nn.Module):
             self.fc_layers[i].weight_data = d
 
     def get_action(self, state):
+        probs, value = self.forward(state)
+        m = Categorical(probs)
+        action = m.sample()
+        prob = m.log_prob(action)
         if self.l == True:
-            num_actions = self.w[-1][1]
-            probs = self.forward(state)
-            action = np.random.choice(num_actions, p=np.squeeze(probs.detach().numpy()))
-            log_prob = torch.log(probs.squeeze(0)[action])
-            return action, log_prob
+            return action, value, prob
         else:
-            with torch.no_grad():
-                num_actions = self.w[-1][1]
-                probs = self.forward(state)
-                action = np.random.choice(num_actions, p=np.squeeze(probs.detach().numpy()))
-                #action = np.argmax(probs)
-                return action
+            return action
 
 class GN_model:
     def __init__(self, w, l=False):
@@ -81,8 +76,9 @@ class GN_model:
 
     def get_action(self, state):
         if self.l == True:
-            action, log_prob = self.policy.get_action(state)
-            self.log_probs.append(log_prob)
+            action, value, log_prob = self.policy.get_action(state)
+            self.probs.append(log_prob)
+            self.values.append(value)
             return action
         else:
             action = self.policy.get_action(state)
@@ -90,13 +86,44 @@ class GN_model:
 
     def reset(self):
         self.rewards = []
-        self.log_probs = []
+        self.probs = []
+        self.values = []
 
     def record_reward(self, reward):
         if reward is None:
             reward = 0
-        self.rewards.append(reward)
+        self.rewards.append(np.float32(reward))
 
+    # New A2C update
+    def finish_episode(self):
+        if len(self.rewards) < 2 or sum(self.rewards) == 0:
+            self.reset()
+            return
+
+        eps = np.finfo(np.float32).eps.item()
+        gamma = 0.995
+        R = 0.0
+        policy_loss = torch.Tensor([0.0])
+        value_loss = torch.Tensor([0.0])
+        returns = []
+        for r in self.rewards:
+            R = r + gamma * R
+            returns.insert(0, R.astype(np.float32))
+        returns = torch.tensor(returns)
+        returns = (returns - returns.mean()) / (returns.std() + eps)
+        for log_prob, value, R in zip(self.probs,
+                                      self.values,
+                                      returns):
+            advantage = R - value.item()
+            policy_loss = policy_loss - log_prob * advantage
+            value_loss = value_loss + F.smooth_l1_loss(value, torch.tensor([R]))
+        self.optimizer.zero_grad()
+        loss = policy_loss + value_loss
+        loss.backward()
+        self.optimizer.step()
+        self.reset()
+
+    # Old non-A2C update
     def update_policy(self):
         discounted_rewards = []
         GAMMA = 0.9
@@ -177,8 +204,14 @@ class Agent:
                     w = torch.Tensor(np.reshape(self.genome[m1:m2],
                                      (self.hidden_size[i], self.hidden_size[i+1])))
                     weights.append([self.hidden_size[i], self.hidden_size[i+1], w])
-        w = torch.Tensor(np.reshape(self.genome[m2:], (self.action_size, self.hidden_size[-1])))
+        m1 = m2
+        m2 = m1 + self.action_size * self.hidden_size[-1]
+        w = torch.Tensor(np.reshape(self.genome[m1:m2], (self.action_size, self.hidden_size[-1])))
         weights.append([self.hidden_size[-1], self.action_size, w])
+        m1 = m2
+        w = torch.Tensor(np.reshape(self.genome[m1:], (1, self.hidden_size[-1])))
+        weights.append([self.hidden_size[-1], 1, w])
+
         return weights
 
     def set_genome(self, genome):
@@ -268,11 +301,11 @@ class Pheromone:
 class game_space:
     def __init__(self,
                  hidden_size=[32, 32],
-                 num_prev_states=2,
+                 num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=200,
-                 genome_store_size=200,
-                 top_n=0.1,
+                 genome_store_size=500,
+                 top_n=0.2,
                  learners=0.5,
                  evaluate_learner_every=50,
                  mutation_rate=0.005,
@@ -285,7 +318,7 @@ class game_space:
                  num_agents=20,
                  agent_start_energy=200,
                  agent_max_inventory=10,
-                 num_predators=10,
+                 num_predators=5,
                  predator_view_distance=5,
                  predator_kill_distance=2,
                  food_sources=20,
@@ -379,65 +412,65 @@ class game_space:
         for t in self.agent_types:
             self.agent_actions[t] = Counter()
             self.recent_actions[t] = deque()
-        self.actions = [#"pick_food",
-                        #"eat_food",
-                        #"drop_food",
+        self.actions = ["pick_food",
+                        "eat_food",
+                        "drop_food",
                         "rotate_right",
                         "rotate_left",
-                        #"flip",
+                        "flip",
                         "propel",
                         "null",
                         "propel_up",
                         "propel_right",
                         "propel_down",
                         "propel_left",
-                        #"mate",
+                        "mate",
                         #"freq_up",
                         #"freq_down",
                         #"move_random",
                         "emit_pheromone"]
-        self.observations = [#"food_up",
-                             #"food_right",
-                             #"food_down",
-                             #"food_left",
-                             #"visible_food",
-                             #"food_pickable",
+        self.observations = ["food_up",
+                             "food_right",
+                             "food_down",
+                             "food_left",
+                             "visible_food",
+                             "food_pickable",
                              "pheromone_up",
                              "pheromone_right",
                              "pheromone_down",
                              "pheromone_left",
-                             #"agents_up",
-                             #"agents_right",
-                             #"agents_down",
-                             #"agents_left",
-                             #"visible_agents",
-                             #"can_mate",
-                             #"mate_in_range",
+                             "agents_up",
+                             "agents_right",
+                             "agents_down",
+                             "agents_left",
+                             "visible_agents",
+                             "can_mate",
+                             "mate_in_range",
                              "predators_up",
                              "predators_right",
                              "predators_down",
                              "predators_left",
                              "visible_predators",
                              "previous_action",
-                             #"own_energy",
-                             #"own_temperature",
+                             "own_energy",
+                             "own_temperature",
                              "own_xposition",
                              "own_yposition",
                              "own_orientation",
                              "own_xvelocity",
                              "own_yvelocity",
-                             #"food_inventory",
-                             #"environment_temperature",
+                             "food_inventory",
+                             "environment_temperature",
                              #"visibility",
-                             #"reproduction_oscillator",
-                             #"distance_moved",
-                             #"own_happiness",
-                             #"own_age",
-                             #"age_oscillator",
-                             #"step_oscillator_day",
-                             #"step_oscillator_day_offset",
-                             #"step_oscillator_year",
-                             #"step_oscillator_year_offset",
+                             "reproduction_oscillator",
+                             "distance_moved",
+                             "own_happiness",
+                             "own_age",
+                             "age_oscillator",
+                             "step_oscillator_day",
+                             "step_oscillator_day_offset",
+                             "step_oscillator_year",
+                             "step_oscillator_year_offset",
                              #"random_input"
                              ]
         self.hidden_size = hidden_size
@@ -450,6 +483,7 @@ class game_space:
                 if i+1 < len(self.hidden_size):
                     self.genome_size += self.hidden_size[i]*self.hidden_size[i+1]
         self.genome_size += self.action_size*self.hidden_size[-1]
+        self.genome_size += self.hidden_size[-1]
         self.genome_store = []
         self.previous_agents = deque()
         self.create_starting_food()
@@ -464,8 +498,8 @@ class game_space:
         self.create_predators()
 
     def step(self):
-        #self.set_environment_visibility()
-        #self.set_environment_temperature()
+        self.set_environment_visibility()
+        self.set_environment_temperature()
         self.apply_predator_physics()
         self.run_predator_actions()
         self.set_agent_states()
@@ -473,8 +507,8 @@ class game_space:
         self.run_agent_actions()
         self.update_agent_status()
         self.update_pheromone_status()
-        #self.reproduce_food()
-        #self.update_berries()
+        self.reproduce_food()
+        self.update_berries()
         if self.save_every > 0:
             if self.steps % self.save_every == 0:
                 self.save_genomes()
@@ -735,6 +769,8 @@ class game_space:
         self.visible_area = math.pi*(self.agent_view_distance**2)
 
     def set_environment_temperature(self):
+        if self.steps % (self.year_period*10) == 0:
+            self.weather_harshness += 0.5
         osc = np.sin(self.steps/self.year_period)
         # Climate change modifies osc multiplier and/or initial value
         osc2 = np.sin(2*self.steps/(self.year_period*10))
@@ -964,7 +1000,10 @@ class game_space:
             self.add_previous_agent(entry)
             if len(store) > 0:
                 a2 = np.mean([x[self.fitness_index] for x in store])
-            reward = (a2 - a1) * 100
+            reward = max(-1, (a2 - a1) * 100)
+            if reward == 0:
+                reward = a/self.agent_start_energy
+            reward = np.float32(reward)
             if self.reward_age_only == True:
                 if len(self.agents[index].model.rewards) > 0:
                     self.agents[index].model.rewards[-1] = reward
@@ -975,7 +1014,7 @@ class game_space:
             affected = self.get_adjacent_agent_indices(index)
             for i in affected:
                 self.agents[i].happiness -= 5
-            self.agents[index].model.update_policy()
+            self.agents[index].model.finish_episode()
             self.agents[index].reset()
             self.agents[index].xpos = random.random()*self.area_size
             self.agents[index].ypos = random.random()*self.area_size
@@ -2136,7 +2175,8 @@ class game_space:
         msg += "\n"
         msg += self.make_labels(self.genome_store, "Genome store ", "gs")
         for atype in self.agent_types:
-            msg += self.print_action_dist(atype)
+            #msg += self.print_action_dist(atype)
+            self.print_action_dist(atype)
         return msg
 
     def print_stats(self):
