@@ -1008,8 +1008,12 @@ class game_space:
                 store = self.genome_store
             if len(store) > 0:
                 a1 = np.mean([x[self.fitness_index] for x in store])
-            self.store_genome(entry)
-            self.add_previous_agent(entry)
+            if a > self.agent_start_energy*0.25:
+                self.store_genome(entry)
+                self.add_previous_agent(entry)
+                affected = self.get_adjacent_agent_indices(index)
+                for i in affected:
+                    self.agents[i].happiness -= 5
             if len(store) > 0:
                 a2 = np.mean([x[self.fitness_index] for x in store])
             reward = max(-1, (a2 - a1) * 10)
@@ -1023,9 +1027,6 @@ class game_space:
             self.evaluate_learner(index)
             self.deaths += 1
             self.resets += 1
-            affected = self.get_adjacent_agent_indices(index)
-            for i in affected:
-                self.agents[i].happiness -= 5
             self.agents[index].model.finish_episode()
             self.agents[index].reset()
             self.agents[index].xpos = random.random()*self.area_size
@@ -1041,12 +1042,13 @@ class game_space:
             f = a + h + d
             g = self.agents[index].model.get_w()
             entry = [g, f, a, h, d, l]
-            self.store_genome(entry)
-            self.add_previous_agent(entry)
             self.deaths += 1
-            affected = self.get_adjacent_agent_indices(index)
-            for i in affected:
-                self.agents[i].happiness -= 5
+            if a > self.agent_start_energy*0.25:
+                self.store_genome(entry)
+                self.add_previous_agent(entry)
+                affected = self.get_adjacent_agent_indices(index)
+                for i in affected:
+                    self.agents[i].happiness -= 5
             if self.visuals == True:
                 self.agents[index].entity.disable()
                 del(self.agents[index].entity)
