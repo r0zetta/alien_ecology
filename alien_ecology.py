@@ -1008,7 +1008,7 @@ class game_space:
                 store = self.genome_store
             if len(store) > 0:
                 a1 = np.mean([x[self.fitness_index] for x in store])
-            if a > self.agent_start_energy*0.25:
+            if a > self.agent_start_energy*0.25 and d > 5:
                 self.store_genome(entry)
                 self.add_previous_agent(entry)
                 affected = self.get_adjacent_agent_indices(index)
@@ -1043,7 +1043,7 @@ class game_space:
             g = self.agents[index].model.get_w()
             entry = [g, f, a, h, d, l]
             self.deaths += 1
-            if a > self.agent_start_energy*0.25:
+            if a > self.agent_start_energy*0.25 and d > 5:
                 self.store_genome(entry)
                 self.add_previous_agent(entry)
                 affected = self.get_adjacent_agent_indices(index)
