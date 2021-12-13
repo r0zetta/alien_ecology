@@ -267,16 +267,15 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[64, 128, 64],
+                 hidden_size=[32],
                  num_prev_states=1,
                  num_recent_actions=1000,
-                 num_previous_agents=500,
-                 genome_store_size=500,
-                 top_n=0.2,
+                 num_previous_agents=200,
+                 genome_store_size=200,
+                 top_n=0.1,
                  learners=0.5,
                  evaluate_learner_every=50,
-                 use_genome_type=0,
-                 mutation_rate=0.001,
+                 mutation_rate=0.005,
                  integer_weights=False,
                  weight_range=1,
                  area_size=50,
@@ -286,7 +285,7 @@ class game_space:
                  num_agents=20,
                  agent_start_energy=200,
                  agent_max_inventory=10,
-                 num_predators=3,
+                 num_predators=6,
                  predator_view_distance=5,
                  predator_kill_distance=2,
                  food_sources=20,
@@ -306,7 +305,7 @@ class game_space:
                  visuals=True,
                  reward_age_only=True,
                  fitness_index=2, # 1: fitness, 2: age
-                 respawn_genome_store=0.3,
+                 respawn_genome_store=0.8,
                  rebirth_genome_store=0.8,
                  save_every=5000,
                  record_every=50,
@@ -333,7 +332,6 @@ class game_space:
         self.learners = learners
         self.reward_age_only = reward_age_only
         self.evaluate_learner_every = evaluate_learner_every
-        self.use_genome_type = use_genome_type
         self.integer_weights = integer_weights
         self.weight_range = weight_range
         self.visuals = visuals
@@ -381,56 +379,57 @@ class game_space:
         for t in self.agent_types:
             self.agent_actions[t] = Counter()
             self.recent_actions[t] = deque()
-        self.actions = ["pick_food",
-                        "eat_food",
-                        "drop_food",
+        self.actions = [#"pick_food",
+                        #"eat_food",
+                        #"drop_food",
                         #"rotate_right",
                         #"rotate_left",
                         #"flip",
                         #"propel",
+                        "null",
                         "propel_up",
                         "propel_right",
                         "propel_down",
                         "propel_left",
-                        "mate",
+                        #"mate",
                         #"freq_up",
                         #"freq_down",
                         #"move_random",
                         "emit_pheromone"]
-        self.observations = ["food_up",
-                             "food_right",
-                             "food_down",
-                             "food_left",
+        self.observations = [#"food_up",
+                             #"food_right",
+                             #"food_down",
+                             #"food_left",
                              #"visible_food",
-                             "food_pickable",
+                             #"food_pickable",
                              "pheromone_up",
                              "pheromone_right",
                              "pheromone_down",
                              "pheromone_left",
-                             "agents_up",
-                             "agents_right",
-                             "agents_down",
-                             "agents_left",
+                             #"agents_up",
+                             #"agents_right",
+                             #"agents_down",
+                             #"agents_left",
                              #"visible_agents",
-                             "can_mate",
-                             "mate_in_range",
+                             #"can_mate",
+                             #"mate_in_range",
                              "predators_up",
                              "predators_right",
                              "predators_down",
                              "predators_left",
                              #"visible_predators",
                              "previous_action",
-                             "own_energy",
-                             "own_temperature",
+                             #"own_energy",
+                             #"own_temperature",
                              "own_xposition",
                              "own_yposition",
                              #"own_orientation",
                              "own_xvelocity",
                              "own_yvelocity",
-                             "food_inventory",
-                             "environment_temperature",
-                             "visibility",
-                             "reproduction_oscillator",
+                             #"food_inventory",
+                             #"environment_temperature",
+                             #"visibility",
+                             #"reproduction_oscillator",
                              #"distance_moved",
                              #"own_happiness",
                              #"own_age",
@@ -474,8 +473,8 @@ class game_space:
         self.run_agent_actions()
         self.update_agent_status()
         self.update_pheromone_status()
-        self.reproduce_food()
-        self.update_berries()
+        #self.reproduce_food()
+        #self.update_berries()
         if self.save_every > 0:
             if self.steps % self.save_every == 0:
                 self.save_genomes()
@@ -491,7 +490,7 @@ class game_space:
         xabs = self.predators[index].xpos
         yabs = self.predators[index].ypos
         zabs = self.predators[index].zpos
-        s = 2
+        s = self.predator_kill_distance
         texture = "textures/red"
         self.predators[index].entity = Entity(model='sphere',
                                               color=color.white,
@@ -1014,14 +1013,15 @@ class game_space:
         for index in range(len(self.agents)):
             self.agents[index].age += 1
             self.set_agent_temperature(index)
-            energy_drain = 1
-            temperature = self.agents[index].temperature
-            if temperature > 30:
-                energy_drain += (temperature - 30) * 0.1
-                self.agents[index].happiness -= 1
-            if temperature < 5:
-                energy_drain += (5 - temperature) * 0.1
-                self.agents[index].happiness -= 1
+            energy_drain = 0
+            #energy_drain = 1
+            #temperature = self.agents[index].temperature
+            #if temperature > 30:
+            #    energy_drain += (temperature - 30) * 0.1
+            #    self.agents[index].happiness -= 1
+            #if temperature < 5:
+            #    energy_drain += (5 - temperature) * 0.1
+            #    self.agents[index].happiness -= 1
             self.agents[index].energy -= energy_drain
             if self.agents[index].energy <= 0:
                 if self.agents[index].learnable == False:
@@ -1829,7 +1829,7 @@ class game_space:
     def mutate_genome(self, g, num_mutations):
         new_genomes = []
         for _ in range(num_mutations):
-            n = int(self.mutation_rate * len(g))
+            n = max(1, int(self.mutation_rate * len(g)))
             indices = random.sample(range(len(g)), n)
             gm = g
             for index in indices:
@@ -1984,7 +1984,7 @@ class game_space:
         ta = sum([self.agent_actions[atype][x] for x in self.actions])
         if ta == 0:
             return ""
-        bars = [int(300*(self.agent_actions[atype][x]/ta)) for x in self.actions]
+        bars = [int(200*(self.agent_actions[atype][x]/ta)) for x in self.actions]
         for i, x in enumerate(self.actions):
             space = (15-len(x))*" "
             bar = bars[i]*"#"
