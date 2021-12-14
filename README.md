@@ -20,6 +20,8 @@ The purpose of this simulation is:
 
 Unfortunately, at this moment, the agents in this simulation are not able to learn policies that improve their longevity within a reasonable time frame. I was hoping that using evolved policies as a starting point for learning agents might speed up (or bootstrap) the reinforcement learning process, but this is clearly not the case. Although the mean age of policies in genome_store increases over time, the policies themselves, when viewed using the visual simulator, don't do what we'd expect (i.e. move around to evade predators, pick and eat food, etc.). I'm not sure whether letting this thing run for a year or two (instead of overnight) would help improve that, but I don't have the time to find that out.
 
+See videos in the media folder for examples.
+
 I am conducting some experiments to understand which of pure evolution, pure learning, or a hybrid mechanism are best in terms of improving the mean age of organisms collected in the best genome store. Results from those runs will be included here once they're done.
 
 
