@@ -308,15 +308,15 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[32],
+                 hidden_size=[64, 64],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=200,
                  genome_store_size=500,
                  top_n=0.2,
-                 learners=0.5,
+                 learners=1.0,
                  evaluate_learner_every=30,
-                 mutation_rate=0.005,
+                 mutation_rate=0.0001,
                  integer_weights=False,
                  weight_range=1,
                  area_size=50,
@@ -340,14 +340,13 @@ class game_space:
                  berry_max_age=100,
                  pheromone_radius=5,
                  pheromone_decay=0.92,
-                 min_reproduction_age=60,
-                 min_reproduction_energy=120,
+                 min_reproduction_age=50,
+                 min_reproduction_energy=100,
                  reproduction_cost=10,
                  visuals=True,
-                 reward_age_only=True,
                  fitness_index=2, # 1: fitness, 2: age
-                 respawn_genome_store=0.8,
-                 rebirth_genome_store=0.8,
+                 respawn_genome_store=0.9,
+                 rebirth_genome_store=0.9,
                  save_every=5000,
                  record_every=50,
                  savedir="alien_ecology_save",
@@ -371,7 +370,6 @@ class game_space:
         self.genome_store_size = genome_store_size
         self.top_n = top_n
         self.learners = learners
-        self.reward_age_only = reward_age_only
         self.evaluate_learner_every = evaluate_learner_every
         self.integer_weights = integer_weights
         self.weight_range = weight_range
@@ -566,14 +564,11 @@ class game_space:
         if os.path.exists(savedir + "/genome_store.pkl"):
             print("Loading genomes.")
             self.load_genomes()
-            sg = []
-            for item in self.genome_store:
-                g = item[0]
-                sg.append(g)
-            if len(sg) > self.num_agents:
-                self.genome_pool = random.sample(sg, self.num_agents)
-            else:
-                self.genome_pool = list(sg)
+        if len(self.genome_store) >= self.num_agents:
+            self.genome_pool = self.get_best_genomes_from_store(self.num_agents, None)
+        else:
+            if len(self.genome_store) > 0:
+                self.genome_pool = [x[0] for x in self.genome_store]
         if len(self.genome_pool) < self.num_agents:
             m = self.num_agents - len(self.genome_pool)
             print("Creating " + str(m) + " random genomes.")
@@ -781,8 +776,6 @@ class game_space:
         self.visible_area = math.pi*(self.agent_view_distance**2)
 
     def set_environment_temperature(self):
-        if self.steps % (self.year_period*10) == 0:
-            self.weather_harshness += 0.5
         osc = np.sin(self.steps/self.year_period)
         # Climate change modifies osc multiplier and/or initial value
         osc2 = np.sin(2*self.steps/(self.year_period*10))
@@ -1020,9 +1013,8 @@ class game_space:
             if reward == 0:
                 reward = a/self.agent_start_energy
             reward = np.float32(reward)
-            if self.reward_age_only == True:
-                if len(self.agents[index].model.rewards) > 0:
-                    self.agents[index].model.rewards[-1] = reward
+            if len(self.agents[index].model.rewards) > 0:
+                self.agents[index].model.rewards[-1] += reward
             self.agents[index].previous_stats.append(entry)
             self.evaluate_learner(index)
             self.deaths += 1
@@ -1069,10 +1061,10 @@ class game_space:
             energy_drain = 1
             temperature = self.agents[index].temperature
             if temperature > 30:
-                energy_drain += (temperature - 30) * 0.1
+                energy_drain += (temperature - 30) * 0.05
                 self.agents[index].happiness -= 1
             if temperature < 5:
-                energy_drain += (5 - temperature) * 0.1
+                energy_drain += (5 - temperature) * 0.05
                 self.agents[index].happiness -= 1
             self.agents[index].energy -= energy_drain
             if self.agents[index].energy <= 0:
@@ -1255,10 +1247,7 @@ class game_space:
         class_method = getattr(self, agent_function)
         reward = class_method(index)
         if self.agents[index].learnable == True:
-            if self.reward_age_only == True:
-                self.agents[index].model.record_reward(0)
-            else:
-                self.agents[index].model.record_reward(reward)
+            self.agents[index].model.record_reward(reward)
 
     def action_null(self, index):
         return 0
@@ -1345,10 +1334,7 @@ class game_space:
     def action_eat_food(self, index):
         reward = 0
         if self.agents[index].food_inventory > 0:
-            if self.agents[index].energy >= self.agent_start_energy:
-                self.agents[index].happiness -= 5
-                reward = -1
-            else:
+            if self.agents[index].energy <= self.agent_start_energy:
                 self.food_eaten += 1
                 self.agents[index].energy += 20
                 self.agents[index].happiness += 100
@@ -1688,9 +1674,9 @@ class game_space:
     def reproduce_food(self):
         growth = random.random()*self.food_energy_growth
         if self.environment_temperature < 5:
-            growth = -1.2
+            growth = -0.5*random.random()
         if self.environment_temperature > 35:
-            growth = -1.2
+            growth = -0.5*random.random()
         dead = []
         for index, f in enumerate(self.food):
             self.food[index].energy += growth
@@ -1704,8 +1690,9 @@ class game_space:
                 dead.append(index)
         if len(dead) > 0:
             if self.visuals == True:
-                self.food[index].entity.disable()
-                del(self.food[index].entity)
+                if self.food[index].entity is not None:
+                    self.food[index].entity.disable()
+                    del(self.food[index].entity)
         new_food = [i for j, i in enumerate(self.food) if j not in dead]
         self.food = new_food
         if len(self.food) < 1:
