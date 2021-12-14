@@ -15,11 +15,12 @@ class Net(nn.Module):
         self.l = l
         self.fc_layers = nn.ModuleList()
         for item in self.w:
-            s1, s2, d, b = item
-            #fc = nn.Linear(s1, s2, bias=False)
-            fc = nn.Linear(s1, s2)
+            #s1, s2, d, b = item
+            s1, s2, d = item
+            fc = nn.Linear(s1, s2, bias=False)
+            #fc = nn.Linear(s1, s2)
             fc.weight.data = d
-            fc.bias.data = b
+            #fc.bias.data = b
             self.fc_layers.append(fc)
 
     def forward(self, x):
@@ -29,25 +30,40 @@ class Net(nn.Module):
         v = F.relu(self.fc_layers[-1](x))
         return a, v
 
+    def print_w(self):
+        for item in self.w:
+            s1, s2, d = item
+            print(s1, s2, np.shape(d))
+        print()
+        for i, l in enumerate(self.fc_layers):
+            d = l.weight.data.detach().numpy()
+            print("fc"+str(i)+" weights: ", d.shape)
+            b = l.bias.data.detach().numpy()
+            print("fc"+str(i)+" biases: ", b.shape)
+        print()
+        sys.exit(0)
+
     def get_w(self):
         w = []
         for fc in self.fc_layers:
             d = fc.weight.data.detach().numpy()
             d = list(np.ravel(d))
             w.extend(d)
-            b = fc.bias.data.detach().numpy()
-            b = list(np.ravel(b))
-            w.extend(b)
+            #b = fc.bias.data.detach().numpy()
+            #b = list(np.ravel(b))
+            #w.extend(b)
         return w
 
     def set_w(self, w):
         self.w = w
         for i, item in enumerate(self.w):
-            s1, s2, d, b = item
+            #s1, s2, d, b = item
+            s1, s2, d = item
             self.fc_layers[i].weight.data = d
-            self.fc_layers[i].bias.data = b
+            #self.fc_layers[i].bias.data = b
 
     def get_action(self, state):
+        #self.print_w()
         probs, value = self.forward(state)
         m = Categorical(probs)
         action = m.sample()
@@ -193,32 +209,39 @@ class Agent:
         weights = []
         m1 = 0
         m2 = self.state_size * self.hidden_size[0]
-        m3 = m2 + self.hidden_size[0]
+        #m3 = m2 + self.hidden_size[0]
         w = torch.Tensor(np.reshape(self.genome[m1:m2], (self.hidden_size[0], self.state_size)))
-        b = torch.Tensor(np.reshape(self.genome[m2:m3], (self.hidden_size[0])))
-        weights.append([self.state_size, self.hidden_size[0], w, b])
+        #b = torch.Tensor(np.reshape(self.genome[m2:m3], (self.hidden_size[0])))
+        #weights.append([self.state_size, self.hidden_size[0], w, b])
+        weights.append([self.state_size, self.hidden_size[0], w])
         if len(self.hidden_size) > 1:
             for i in range(len(self.hidden_size)):
                 if i+1 < len(self.hidden_size):
-                    m1 = m3
+                    #m1 = m3
+                    m1 = m2
                     m2 = m1 + (self.hidden_size[i] * self.hidden_size[i+1])
-                    m3 = m2 + self.hidden_size[i+1]
+                    #m3 = m2 + self.hidden_size[i]
                     w = torch.Tensor(np.reshape(self.genome[m1:m2],
-                                     (self.hidden_size[i], self.hidden_size[i+1])))
-                    b = torch.Tensor(np.reshape(self.genome[m2:m3], (self.hidden_size[i+1])))
-                    weights.append([self.hidden_size[i], self.hidden_size[i+1], w, b])
-        m1 = m3
+                                     (self.hidden_size[i+1], self.hidden_size[i])))
+                    #b = torch.Tensor(np.reshape(self.genome[m2:m3], (self.hidden_size[i])))
+                    #weights.append([self.hidden_size[i], self.hidden_size[i+1], w, b])
+                    weights.append([self.hidden_size[i], self.hidden_size[i+1], w])
+        #m1 = m3
+        m1 = m2
         m2 = m1 + self.action_size*self.hidden_size[-1]
-        m3 = m2 + self.action_size
+        #m3 = m2 + self.action_size
         w = torch.Tensor(np.reshape(self.genome[m1:m2], (self.action_size, self.hidden_size[-1])))
-        b = torch.Tensor(np.reshape(self.genome[m2:m3], (self.action_size)))
-        weights.append([self.hidden_size[-1], self.action_size, w, b])
-        m1 = m3
+        #b = torch.Tensor(np.reshape(self.genome[m2:m3], (self.action_size)))
+        #weights.append([self.hidden_size[-1], self.action_size, w, b])
+        weights.append([self.hidden_size[-1], self.action_size, w])
+        #m1 = m3
+        m1 = m2
         m2 = m1 + self.hidden_size[-1]
-        m3 = m2 + 1
+        #m3 = m2 + 1
         w = torch.Tensor(np.reshape(self.genome[m1:m2], (1, self.hidden_size[-1])))
-        b = torch.Tensor(np.reshape(self.genome[m2:m3], (1)))
-        weights.append([self.hidden_size[-1], 1, w, b])
+        #b = torch.Tensor(np.reshape(self.genome[m2:m3], (1)))
+        #weights.append([self.hidden_size[-1], 1, w, b])
+        weights.append([self.hidden_size[-1], 1, w])
 
         return weights
 
@@ -308,14 +331,14 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[64, 64],
+                 hidden_size=[64, 128, 64],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  num_previous_agents=200,
                  genome_store_size=500,
                  top_n=0.2,
                  learners=1.0,
-                 evaluate_learner_every=30,
+                 evaluate_learner_every=1000000,
                  mutation_rate=0.0001,
                  integer_weights=False,
                  weight_range=1,
@@ -484,16 +507,16 @@ class game_space:
         self.state_size = len(self.observations)*self.num_prev_states
         self.genome_size = 0
         self.genome_size += self.state_size*self.hidden_size[0]
-        self.genome_size += self.hidden_size[0]
+        #self.genome_size += self.hidden_size[0]
         if len(self.hidden_size) > 1:
             for i in range(len(self.hidden_size)):
                 if i+1 < len(self.hidden_size):
                     self.genome_size += self.hidden_size[i]*self.hidden_size[i+1]
-                    self.genome_size += self.hidden_size[i+1]
+                    #self.genome_size += self.hidden_size[i+1]
         self.genome_size += self.action_size*self.hidden_size[-1]
+        #self.genome_size += self.hidden_size[-1]
         self.genome_size += self.hidden_size[-1]
-        self.genome_size += self.hidden_size[-1]
-        self.genome_size += 1
+        #self.genome_size += 1
         self.genome_store = []
         self.previous_agents = deque()
         self.create_starting_food()
