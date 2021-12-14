@@ -22,4 +22,29 @@ Unfortunately, at this moment, the agents in this simulation are not able to lea
 
 I am conducting some experiments to understand which of pure evolution, pure learning, or a hybrid mechanism are best in terms of improving the mean age of organisms collected in the best genome store.
 
- 
+
+# Technical details
+The whole simulation is implemented in **alien_ecology.py**. If you want to try running this yourself, you will likely need to install some python packages, including numpy, ursina, and torch (pyTorch). To run the simulation, just type:
+
+python alien_ecology.py
+
+at the command line. To see visual output, append **-v** to the above command line. Note that ursina aggressively leaks memory, so don't leave the visual simulator running for too long.
+
+All other options will require editing the file itself, since I didn't bother parameterizing them. Look for class game_space and edit the inputs to the init function. Here are a few tips:
+
+- **hidden_size** defines the shape of the hidden layers in the neural network
+- **num_prev_states** allows you to set how many previous observation sets are present in the model's input
+- **top_n** defines the portion of genomes to select from either previous_agents or genome_store when reproducing or spawning new agents
+- **learners** defines the split between learning agents and evolving agents. At 1.0, the simulation is all learners. At 0.0, the simulation is all evolvers.
+- **area_size** defines the width and height of the simulated area. It is always a square shape.
+- **num_agents** defines the number of agents to run in the simulation
+- **agent_start_energy** defines agent starting energy. It will decay by one per step, or more if it is too hot or cold.
+- **num_predators** defines the number of predators in the simulation. If you want to have fun, increase the speed and inertial_damping values in class Predator.
+- **min_reproduction_age** and **min_reproduction_energy** define the constraints for mating. Setting these to low values will cause a population explosion that's worth seeing at least once, even if it does bring the whole thing to a crawl.
+- **fitness_index** if set to 1 will evaluate new genomes based on fitness, and if set to 2 will base on age
+- **respawn_genome_store** - when evolving agents are respawned, how likely are their new genomes to come from genome_store instead of previous_agents
+- **rebirth_genome_store** - same as above but for learning agents
+
+Note that you can also change the simulation by commenting out items in self.actions and/or self.observations.
+
+It took me a few weeks of coding and tweaking to make this. Shame that it doesn't work. If you can get it to work, and tell me how you fixed it, I'd be eternally happy.
