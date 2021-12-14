@@ -30,6 +30,8 @@ python alien_ecology.py
 
 at the command line. To see visual output, append **-v** to the above command line. Note that ursina aggressively leaks memory, so don't leave the visual simulator running for too long.
 
+You can view stats from the experiment by running the accompanying plot_stats.ipynb notebook.
+
 All other options will require editing the file itself, since I didn't bother parameterizing them. Look for class game_space and edit the inputs to the init function. Here are a few tips:
 
 - **hidden_size** defines the shape of the hidden layers in the neural network
