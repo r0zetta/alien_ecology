@@ -36,6 +36,12 @@ Finally, here is a plot of the learning-only experiment over the same 24 hour pe
 
 Evolution clearly produced agents with the best longevity (632.09) during the training period. The hybrid approach produced learning agents with a slightly better mean age (350) than that of a learning-only approach (328.64). Evolving agents in the hybrid approach achieved a mean age score (382.11) that was much lower than an evolution-only (631.09) strategy.
 
+The genomes captured from the evolution-only experiment were loaded separately and visualized. This visualization can be seen in the following animated gif.
+![evolved_policy](media/evolved_policy_1.png)
+
+As you can see, most of the agents remain stationary, do not evade predators, and do not pick or eat food.
+
+
 # Technical details
 The whole simulation is implemented in **alien_ecology.py**. If you want to try running this yourself, you will likely need to install some python packages, including numpy, ursina, and torch (pyTorch). To run the simulation, just type:
 
