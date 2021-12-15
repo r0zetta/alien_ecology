@@ -38,7 +38,7 @@ Finally, here is a plot of the learning-only experiment over the same 24 hour pe
 
 Evolution clearly produced agents with the best longevity (632.09) during the training period. The hybrid approach produced learning agents with a slightly better mean age (350) than that of a learning-only approach (328.64). Evolving agents in the hybrid approach achieved a mean age score (382.11) that was much lower than an evolution-only (631.09) strategy.
 
-The genomes captured from the evolution-only experiment were loaded separately and visualized. This visualization can be seen in the following animated gif, which shows how most of the agents remain stationary, do not evade predators, and do not pick or eat food.
+The genomes captured from the evolution-only experiment were loaded separately and visualized. This visualization can be seen in the following animated gif, which shows how most of the agents remain stationary, do not evade predators, and do not pick or eat food. It is possible that the agents exhibit no movements due to the fact that the get_action() function is designed to be used for A2C-style reinforcement learning and thus outputs not the argmax of softmax values returned by the neural network, but a sample of a categorical probability distribution. Further testing is required to determine whether this is the case.
 
 ![evolved_policy](media/evolved_policy_1.gif)
 
