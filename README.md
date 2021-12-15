@@ -24,10 +24,12 @@ See videos in the media folder for examples.
 
 ## Results: effects of learning, evolution, and a hybrid approach on organism age
 
-The following figure depicts a plot of the mean age of 20 evolving agents in both previous_agents (the last 100 agent runs) and genome_store (the best 100 recorded agent runs) over a 24-hour period from start of training. During this period, the simulation had executed 1,197,886 steps and spawned 212,606 new agents. Agents in genome_store had a mean age of 631.09, with a maximum recorded age of 789.00 and a minimum recorded age of 577.00
+The following figure depicts a plot of the mean age of 20 evolving agents in both previous_agents (the last 100 agent runs) and genome_store (the best 100 recorded agent runs) over a 24-hour period from start of training. During this period, the simulation had executed 1,197,886 steps and spawned 212,606 new agents. Agents in genome_store had a mean age of 631.09, with a maximum recorded age of 789.00 and a minimum recorded age of 577.00.
+
 ![evolvers_mean_age](media/evolving_age_1.png)
 
 Here is a plot of the hybrid experiment run during the same 24 hour period as the other two experiments. The simulation contained 10 evolving agents and 10 learning agents. During this period, the simulation executed 919,921 steps and spawned 87,189 new evolving agents and 76,936 learning agents. Learning agents in genome_store had a mean age of 350.00 with maximum age 380.00 and minimum age 324.00. Evolving agents in the genome_store had a mean age of 382.11, a maximum age of 599.00 and a minimum age of 320.00.
+
 ![hybrid_mean_age](media/hybrid_age_1.png)
 
 Finally, here is a plot of the learning-only experiment over the same 24 hour period. The simulation contained 20 learning agents. Agents were evaluated every 30 full runs - if their age on the final run was less then 75% of the mean age of agents stored in genome_store, their genome was replaced by a random choice from the top 20% of genomes in genome_store. During this period, the simulation executed 1,175,175 steps and spawned 262,570 new agents. During evaluation, 8,572 agents received new genomes from genome_store and 172 agents continued with their learned policy. Learning agents in genome_store had a mean age of 328.64, a maximum age of 687.00, and a minimum age: 278.00.
