@@ -18,9 +18,8 @@ The purpose of this simulation is:
 - to observe and document interesting emergent behaviours in the simulated swarm
 - to understand whether evolution can be used to improve reinforcement learning mechanisms
 
-Unfortunately, at this moment, the agents in this simulation are not able to learn policies that improve their longevity within a reasonable time frame. I was hoping that using evolved policies as a starting point for learning agents might speed up (or bootstrap) the reinforcement learning process, but this is clearly not the case. Although the mean age of policies in genome_store increases over time, the policies themselves, when viewed using the visual simulator, don't do what we'd expect (i.e. move around to evade predators, pick and eat food, etc.). I'm not sure whether letting this thing run for a year or two (instead of overnight) would help improve that, but I don't have the time to find that out.
+Unfortunately, at this moment, the agents in this simulation are not able to learn policies that improve their longevity within a reasonable time frame. I was hoping that using evolved policies as a starting point for learning agents might speed up (or bootstrap) the reinforcement learning process, but this is clearly not the case. Although the mean age of policies in genome_store increases over time, the policies themselves, when viewed using the visual simulator, don't do what we'd expect (i.e. move around to evade predators, pick and eat food, etc.). I'm not sure whether letting this thing run for a much longer period (instead of overnight) would help improve that. I'm ultimately interested in discovering a mechanism that can train these agents in a reasonable timeframe.
 
-See videos in the media folder for examples.
 
 ## Results: effects of learning, evolution, and a hybrid approach on organism age
 
@@ -38,7 +37,7 @@ Finally, here is a plot of the learning-only experiment over the same 24 hour pe
 
 Evolution clearly produced agents with the best longevity (632.09) during the training period. The hybrid approach produced learning agents with a slightly better mean age (350) than that of a learning-only approach (328.64). Evolving agents in the hybrid approach achieved a mean age score (382.11) that was much lower than an evolution-only (631.09) strategy.
 
-The genomes captured from the evolution-only experiment were loaded separately and visualized. This visualization can be seen in the following animated gif, which shows how most of the agents remain stationary, do not evade predators, and do not pick or eat food. It is possible that the agents exhibit no movements due to the fact that the get_action() function is designed to be used for A2C-style reinforcement learning and thus outputs not the argmax of softmax values returned by the neural network, but a sample of a categorical probability distribution. Further testing is required to determine whether this is the case.
+The genomes captured from the evolution-only experiment were loaded separately and visualized. This visualization can be seen in the following animated gif, which shows how most of the agents remain stationary, do not evade predators, and do not pick or eat food. It is possible that the agents exhibit no movements due to the fact that the get_action() function is designed to be used for A2C-style reinforcement learning and thus outputs a sample of a categorical probability distribution of the softmax output of the model, and not the argmax of those values. Further testing is required to determine whether this is the case.
 
 ![evolved_policy](media/evolved_policy_1.gif)
 
