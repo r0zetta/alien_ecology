@@ -38,11 +38,17 @@ Finally, here is a plot of the learning-only experiment over the same 24 hour pe
 
 Evolution clearly produced agents with the best longevity (632.09) during the training period. The hybrid approach produced learning agents with a slightly better mean age (350) than that of a learning-only approach (328.64). Evolving agents in the hybrid approach achieved a mean age score (382.11) that was much lower than an evolution-only (631.09) strategy.
 
-The genomes captured from the evolution-only experiment were loaded separately and visualized. This visualization can be seen in the following animated gif.
+The genomes captured from the evolution-only experiment were loaded separately and visualized. This visualization can be seen in the following animated gif, which shows how most of the agents remain stationary, do not evade predators, and do not pick or eat food.
 
 ![evolved_policy](media/evolved_policy_1.gif)
 
-As you can see, most of the agents remain stationary, do not evade predators, and do not pick or eat food.
+Below is a similar visualization for learned policies. Even though the mean age of agents in genome_store was considerably lower than those in the evolved-only experiments, these agents actually move around and even "swarm". Still, they don't behave as expected.
+
+![learned_policy](media/learned_policy_1.gif)
+
+Finally, here is a visualization of the results of 24 hours or training the hybrid experiment. Pink organisms are learned and blue are evolved. Both types move a lot more than those trained using the evolution only approach.
+
+![hybrid_policy](media/hybrid_policy_1.gif)
 
 
 # Technical details
