@@ -24,7 +24,7 @@ See videos in the media folder for examples.
 
 ## Results: effects of learning, evolution, and a hybrid approach on organism age
 
-The following figure depicts a plot of the mean age of 20 evolving agents in both previous_agents (the last 100 agent runs) and genome_store (the best 100 recorded agent runs) over a 24-hour period from start of training. During this period, the simulation had executed 1,197,886 steps and spawned 212,606 new agents. Agents in genome_store had a mean age of 631.09, with a maximum recorded age of 789.00 and a minimum recorded age of 577.00.
+The following figure depicts a plot of the mean age of 20 evolving agents in both previous_agents (the last 100 agent runs) and genome_store (the best 100 recorded agent runs) over a 24-hour period from start of training. All experiments involved agents with a hidden layer configuration of [64, 128, 64]. During this period, the simulation had executed 1,197,886 steps and spawned 212,606 new agents. Agents in genome_store had a mean age of 631.09, with a maximum recorded age of 789.00 and a minimum recorded age of 577.00.
 
 ![evolvers_mean_age](media/evolving_age_1.png)
 
