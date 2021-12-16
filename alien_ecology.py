@@ -314,7 +314,6 @@ class Pheromone:
 
 # No evolution:
 # learners=1.00
-# evaluate_learner_every=1000000
 # min_reproduction_age=200
 # min_reproduction_energy=200
 
@@ -325,7 +324,6 @@ class Pheromone:
 
 # Hybrid evolution:
 # learners=0.50
-# evaluate_learner_every=30
 # min_reproduction_age=50
 # min_reproduction_energy=100
 
@@ -336,7 +334,7 @@ class game_space:
                  num_recent_actions=1000,
                  num_previous_agents=100,
                  genome_store_size=100,
-                 top_n=0.5,
+                 top_n=1.0,
                  learners=1.0,
                  evaluate_learner_every=30,
                  mutation_rate=0.0001,
@@ -1045,7 +1043,6 @@ class game_space:
             if len(self.agents[index].model.rewards) > 0:
                 self.agents[index].model.rewards[-1] += reward
             self.agents[index].previous_stats.append(entry)
-            self.evaluate_learner(index)
             self.deaths += 1
             self.resets += 1
             self.agents[index].model.finish_episode()
@@ -1053,6 +1050,7 @@ class game_space:
             self.agents[index].xpos = random.random()*self.area_size
             self.agents[index].ypos = random.random()*self.area_size
             self.set_initial_agent_state(index)
+            self.evaluate_learner(index)
 
     def kill_agents(self, dead):
         for index in dead:
