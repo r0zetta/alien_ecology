@@ -45,9 +45,31 @@ Below is a similar visualization for learned policies. Even though the mean age 
 
 ![learned_policy](media/learned_policy_1.gif)
 
-Finally, here is a visualization of the results of 24 hours or training the hybrid experiment. Pink organisms are learned and blue are evolved. Both types move a lot more than those trained using the evolution only approach.
+Below is a visualization of the results of 24 hours or training the hybrid experiment. Pink organisms are learned and blue are evolved. Both types move a lot more than those trained using the evolution only approach.
 
 ![hybrid_policy](media/hybrid_policy_1.gif)
+
+Given that the learning-only methodolody produced the most interesting policy, I ran the same experiment, but allowed it to train for longer. Below is a plot of that experiment, containing 30 learning agents, which ran for 2,549,614 steps during which 800,748 new agents were spawned. During evaluation (after 30 episodes), 26,184 agents were given a genome from the pool and 492 continued with their current genome. At the end of the run, genome_store contained policies with a mean age of 341.34, a maximum age of 846.00 and a minimum age of 161.00.
+
+![learning_2_age_plot](media/learner_only2_age_plot.png)
+
+The resulting captured policy looked like this in the simulator:
+
+![learning_2_policy](media/learner_only2_policy.gif)
+
+As you can see, despite the fact that the mean age of policies captured continued to increase during this run, the resulting policies, when viewed in the simulation, still don't behave as expected.
+
+The agents in the above experiments start with 200 energy, and thus have plenty of time to interact with the environment. One would expect that the need to learn to evade predators likely initially outweighs the need to learn to pick and eat food. Agents that start with a lower energy value would probably need to learn the opposite first, and it could be thus assumed that the age of agents in such an experiment should increase more quickly. In order to test this, I ran another learner-only experiment containing 20 learner agents with a start energy of 50. This experiment was allowed to run overnight. 508,101 steps were executed, with 263,006 new agents being spawned. At the end of the experiment, genome_stoe contained agents with a mean age of 70.00, a max age of 70.00, and a min age of 70.00. A plot of the run is depicted below.
+
+![short_lifespan_age_plot](media/short_lifespan_age_plot.png)
+
+The visualized policies learned during this experiment are shown below.
+
+![short_life_policy](media/short_life_policy.gif)
+
+It is clear that the agents quickly hit a wall in which they are unable to learn anything new. Perhaps this is due to there being too few parameters in their neural networks.
+
+
 
 
 # Technical details
