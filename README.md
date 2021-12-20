@@ -1,6 +1,3 @@
-# alien_ecology
-An environment for evolving alien creatures
-
 ## Introduction
 This repository contains code that implements an environment for simulated organisms to learn and evolve behaviours. The environment itself is a two-dimensional toroidal plane - organisms that travel over an edge appear at the opposite edge of the plane in a similar fashion to how pacman moves. The environment presents a number of problems the organisms must learn to solve:
 
