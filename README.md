@@ -98,4 +98,5 @@ All other options will require editing the file itself, since I didn't bother pa
 
 Note that you can also change the simulation by commenting out items in self.actions and/or self.observations.
 
-It took me a few weeks of coding and tweaking to make this. Shame that it doesn't work. If you can get it to work, and tell me how you fixed it, I'd be eternally happy.
+A second learner-only experiment (alien_ecology_NaRLA.py) is included whose agents implement logic described in: Giving Up Control: Neurons as Reinforcement Learning Agents (https://arxiv.org/abs/2003.11642). The original code for implementing NaRLA can be found here: https://github.com/Multi-Agent-Networks/NaRLA
+
