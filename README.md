@@ -67,9 +67,17 @@ The visualized policies learned during this experiment are shown below.
 
 ![short_life_policy](media/short_life_policy.gif)
 
-It is clear that the agents quickly hit a wall in which they are unable to learn anything new. Perhaps this is due to there being too few parameters in their neural networks.
+It is clear that the agents quickly hit a wall in which they are unable to learn anything new. Perhaps this is due to there being too few parameters in their neural networks. I decided to investigate a new reinforcement learning approach described in **Giving Up Control: Neurons as Reinforcement Learning Agents** (https://arxiv.org/abs/2003.11642). I slightly repurposed the NaRLA code (from https://github.com/Multi-Agent-Networks/NaRLA) in order to have it work with my simulated environment. Even with low numbers of layers and neurons, this approach is much more resource-intensive than the plain feed-forward networks used in the other experiments. As a tradeoff between resource usage and network size, I opted to use one layer of 16 NaRLA neurons. I also modified the original authors experiment parameters and set the size of each neuron's network to 16 (instead of the original 32). Network update used the "sync" setting, and I chose "all" rewards. Due to the heavy required resource load, I ran a simulation environment containing only 10 agents. Also, instead of collecting a pool of best genomes, I simply saved all ten policies. Thus the age plot during this experiment is not directly comparable to those in previous experiments. The age plot is shown below:
 
+![NaRLA_age_plot](media/NaRLA_age_plot.png)
 
+The experiment executed 1,587,524 steps (over several days) and 95,038 episodes. At the moment the experiment was shut down, the mean age of agents in the pool was 237.9. Below is a visual capture of the policy.
+
+![NaRLA_policy](media/NaRLA_policy.gif)
+
+This policy is the most interesting yet, but the agents still fail to behave as expected. Further experimentation with NaRLA would be interesting. I used the policy gradient approach implemented by the original author for the above experiment, but would like to modify the mechanism to use A2C instead. Also, different neural arrangements might be worth trying.
+
+Ultimately, these experiments prove that current techniques for training agents are way too slow. I originally created this experiment in order to observe emergent behaviour between organisms in a simulation. My plan was to add additional complexity to the simulation in the form of items and entities to interact with. However, what happened instead was a failed search for a method to train these simple agents in the first place.
 
 
 # Technical details
