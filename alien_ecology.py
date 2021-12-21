@@ -379,7 +379,7 @@ class game_space:
                  food_dist=7,
                  food_repro_energy=15,
                  food_start_energy=10,
-                 food_energy_growth=5,
+                 food_energy_growth=0,
                  food_max_percent=0.05,
                  food_plant_success=0.5,
                  berry_max_age=100,
@@ -1165,17 +1165,14 @@ class game_space:
             affected = self.get_adjacent_agent_indices(index)
             for i in affected:
                 self.agents[i].happiness -= 5
-            if self.visuals == True:
-                self.agents[index].entity.disable()
-                del(self.agents[index].entity)
-        new_agents = [i for j, i in enumerate(self.agents) if j not in dead]
-        self.agents = list(new_agents)
-        if len(self.agents) < self.num_agents:
-            deficit = self.num_agents - len(self.agents)
-            for _ in range(deficit):
-                self.spawns += 1
-                genome = self.make_new_genome(0)
-                self.spawn_evolving_agent(genome)
+
+            self.agents[index].reset()
+            xpos, ypos = self.get_safe_spawn_location()
+            self.agents[index].xpos = xpos
+            self.agents[index].ypos = ypos
+            genome = self.make_new_genome(0)
+            self.agents[index].set_genome(g)
+            self.set_initial_agent_state(index)
 
     def update_agent_status(self):
         dead = set()
