@@ -63,12 +63,17 @@ class Net(nn.Module):
             #self.fc_layers[i].bias.data = b
 
     def get_action(self, state):
-        #self.print_w()
         probs, value = self.forward(state)
-        m = Categorical(probs)
-        action = m.sample()
-        prob = m.log_prob(action)
-        return action, value, prob
+        if self.l == True:
+            m = Categorical(probs)
+            action = m.sample()
+            prob = m.log_prob(action)
+            return action, value, prob
+        else:
+            m = Categorical(probs)
+            action = m.sample()
+            #action = np.argmax(probs.detach().numpy())
+            return action
 
 class GN_model:
     def __init__(self, w, l=False):
@@ -76,7 +81,7 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-3)
             self.reset()
 
     def num_params(self):
@@ -93,11 +98,14 @@ class GN_model:
         return self.policy.set_w(w)
 
     def get_action(self, state):
-        action, value, log_prob = self.policy.get_action(state)
         if self.l == True:
+            action, value, log_prob = self.policy.get_action(state)
             self.probs.append(log_prob)
             self.values.append(value)
-        return action
+            return action
+        else:
+            action = self.policy.get_action(state)
+            return action
 
     def reset(self):
         self.rewards = []
@@ -269,6 +277,7 @@ class Agent:
         self.inertial_damping = 0.80
         self.speed = 0.4
         self.previous_states = deque()
+        self.previous_actions = []
 
     def get_action(self):
         if self.sample == True:
@@ -329,13 +338,10 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[64, 128, 64],
+                 hidden_size=[16],
                  num_prev_states=1,
                  num_recent_actions=1000,
-                 num_previous_agents=100,
-                 genome_store_size=100,
-                 top_n=1.0,
-                 learners=1.0,
+                 learners=0.5,
                  evaluate_learner_every=30,
                  mutation_rate=0.0001,
                  integer_weights=False,
@@ -344,14 +350,15 @@ class game_space:
                  year_period=10*50,
                  day_period=10,
                  weather_harshness=0,
-                 num_agents=30,
+                 num_agents=20,
                  agent_start_energy=200,
+                 agent_energy_drain=0,
                  agent_max_inventory=10,
                  num_predators=5,
                  predator_view_distance=5,
                  predator_kill_distance=2,
                  food_sources=20,
-                 food_spawns=15,
+                 food_spawns=20,
                  food_dist=7,
                  food_repro_energy=15,
                  food_start_energy=10,
@@ -364,11 +371,14 @@ class game_space:
                  min_reproduction_age=50,
                  min_reproduction_energy=100,
                  reproduction_cost=10,
-                 visuals=True,
-                 fitness_index=1, # 1: fitness, 2: age
-                 respawn_genome_store=1.0,
+                 visuals=False,
+                 num_previous_agents=200,
+                 genome_store_size=200,
+                 fitness_index=2, # 1: fitness, 2: age
+                 respawn_genome_store=0.9,
                  rebirth_genome_store=0.9,
-                 save_every=5000,
+                 top_n=0.3,
+                 save_every=2000,
                  record_every=50,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
@@ -410,6 +420,7 @@ class game_space:
         self.num_agents = num_agents
         self.agent_max_inventory = agent_max_inventory
         self.agent_start_energy = agent_start_energy
+        self.agent_energy_drain = agent_energy_drain
         self.num_predators = num_predators
         self.predator_view_distance = predator_view_distance
         self.predator_kill_distance = predator_kill_distance
@@ -442,8 +453,8 @@ class game_space:
         self.actions = ["pick_food",
                         "eat_food",
                         "drop_food",
-                        "rotate_right",
-                        "rotate_left",
+                        #"rotate_right",
+                        #"rotate_left",
                         #"flip",
                         #"propel",
                         #"null",
@@ -461,39 +472,39 @@ class game_space:
                              "food_right",
                              "food_down",
                              "food_left",
-                             "visible_food",
+                             #"visible_food",
                              "food_pickable",
                              #"pheromone_up",
                              #"pheromone_right",
                              #"pheromone_down",
                              #"pheromone_left",
-                             "agents_up",
-                             "agents_right",
-                             "agents_down",
-                             "agents_left",
-                             "visible_agents",
+                             #"agents_up",
+                             #"agents_right",
+                             #"agents_down",
+                             #"agents_left",
+                             #"visible_agents",
                              #"can_mate",
                              #"mate_in_range",
                              "predators_up",
                              "predators_right",
                              "predators_down",
                              "predators_left",
-                             "visible_predators",
-                             "previous_action",
+                             #"visible_predators",
+                             #"previous_action",
                              "own_energy",
-                             "own_temperature",
-                             "own_xposition",
-                             "own_yposition",
-                             "own_orientation",
-                             "own_xvelocity",
-                             "own_yvelocity",
+                             #"own_temperature",
+                             #"own_xposition",
+                             #"own_yposition",
+                             #"own_orientation",
+                             #"own_xvelocity",
+                             #"own_yvelocity",
                              "food_inventory",
-                             "environment_temperature",
-                             "visibility",
+                             #"environment_temperature",
+                             #"visibility",
                              #"reproduction_oscillator",
-                             "distance_moved",
-                             "own_happiness",
-                             "own_age",
+                             #"distance_moved",
+                             #"own_happiness",
+                             #"own_age",
                              #"age_oscillator",
                              #"step_oscillator_day",
                              #"step_oscillator_day_offset",
@@ -519,6 +530,7 @@ class game_space:
         self.genome_store = []
         self.previous_agents = deque()
         self.create_starting_food()
+        self.create_predators()
         self.create_genomes()
         self.agents = []
         num_learners = int(self.num_agents * self.learners)
@@ -527,7 +539,6 @@ class game_space:
             self.create_new_learner_agents(num_learners)
         if num_evolvable > 0:
             self.create_new_evolvable_agents(num_evolvable)
-        self.create_predators()
 
     def step(self):
         self.set_environment_visibility()
@@ -625,10 +636,20 @@ class game_space:
     def spawn_evolving_agent(self, genome):
         self.spawn_new_agent(genome, False)
 
+    def get_safe_spawn_location(self):
+        xpos = 0
+        ypos = 0
+        for _ in range(20):
+            xpos = random.random()*self.area_size
+            ypos = random.random()*self.area_size
+            predators = self.get_predators_in_radius(xpos, ypos, self.agent_view_distance)
+            if len(predators) < 1:
+                return xpos, ypos
+        return xpos, ypos
+
     def spawn_new_agent(self, genome, learner):
         self.spawns += 1
-        xpos = random.random()*self.area_size
-        ypos = random.random()*self.area_size
+        xpos, ypos = self.get_safe_spawn_location()
         zpos = -1
         color = 0
         if learner == False:
@@ -697,6 +718,20 @@ class game_space:
 #################
 # Helper routines
 #################
+    def entropy(self, actions):
+        n_actions = len(actions)
+        if n_actions <= 1:
+            return 0
+        value,counts = np.unique(actions, return_counts=True)
+        probs = counts / n_actions
+        n_classes = np.count_nonzero(probs)
+        if n_classes <= 1:
+            return 0
+        ent = 0.
+        for i in probs:
+            ent -= i * math.log(i, math.e)
+        return ent
+
     def distance(self, x1, y1, x2, y2):
         return math.sqrt(((x1-x2)**2)+((y1-y2)**2))
 
@@ -792,6 +827,7 @@ class game_space:
 ########################
 
     def set_environment_visibility(self):
+        return
         osc = np.sin(self.steps/self.day_period)
         # 2 - 5
         #self.agent_view_distance = 3.5 + (1.5*osc)
@@ -800,6 +836,7 @@ class game_space:
         self.visible_area = math.pi*(self.agent_view_distance**2)
 
     def set_environment_temperature(self):
+        return
         osc = np.sin(self.steps/self.year_period)
         # Climate change modifies osc multiplier and/or initial value
         #osc2 = np.sin(2*self.steps/(self.year_period*10))
@@ -833,6 +870,7 @@ class game_space:
     def run_agent_actions(self):
         for n in range(len(self.agents)):
             action = int(self.agents[n].get_action())
+            self.agents[n].previous_actions.append(action)
             atype = 0
             if self.agents[n].learnable == True:
                 atype = 1
@@ -1014,6 +1052,7 @@ class game_space:
     def reset_agents(self, reset):
         for index in reset:
             l = int(self.agents[index].learnable)
+            ae = self.entropy(self.agents[index].previous_actions) * 0.1
             a = self.agents[index].age
             h = self.agents[index].happiness
             d = self.agents[index].distance_travelled
@@ -1027,18 +1066,17 @@ class game_space:
                 store = self.genome_store
             if len(store) > 0:
                 a1 = np.mean([x[self.fitness_index] for x in store])
-            if a > self.agent_start_energy*0.25 and d > 5:
-                self.store_genome(entry)
-                self.add_previous_agent(entry)
-                affected = self.get_adjacent_agent_indices(index)
-                for i in affected:
-                    self.agents[i].happiness -= 5
+            self.store_genome(entry)
+            self.add_previous_agent(entry)
+            affected = self.get_adjacent_agent_indices(index)
+            for i in affected:
+                self.agents[i].happiness -= 5
             if len(store) > 0:
                 a2 = np.mean([x[self.fitness_index] for x in store])
             reward = max(-1, (a2 - a1) * 10)
             reward = 0
             if reward == 0:
-                reward = a/self.agent_start_energy
+                reward = ((a-self.agent_start_energy)/self.agent_start_energy) + ae
             reward = np.float32(reward)
             if len(self.agents[index].model.rewards) > 0:
                 self.agents[index].model.rewards[-1] += reward
@@ -1047,14 +1085,16 @@ class game_space:
             self.resets += 1
             self.agents[index].model.finish_episode()
             self.agents[index].reset()
-            self.agents[index].xpos = random.random()*self.area_size
-            self.agents[index].ypos = random.random()*self.area_size
+            xpos, ypos = self.get_safe_spawn_location()
+            self.agents[index].xpos = xpos
+            self.agents[index].ypos = ypos
             self.set_initial_agent_state(index)
             self.evaluate_learner(index)
 
     def kill_agents(self, dead):
         for index in dead:
             l = int(self.agents[index].learnable)
+            ae = self.entropy(self.agents[index].previous_actions) * 0.1
             a = self.agents[index].age
             h = self.agents[index].happiness
             d = self.agents[index].distance_travelled
@@ -1062,12 +1102,11 @@ class game_space:
             g = self.agents[index].model.get_w()
             entry = [g, f, a, h, d, l]
             self.deaths += 1
-            if a > self.agent_start_energy*0.25 and d > 5:
-                self.store_genome(entry)
-                self.add_previous_agent(entry)
-                affected = self.get_adjacent_agent_indices(index)
-                for i in affected:
-                    self.agents[i].happiness -= 5
+            self.store_genome(entry)
+            self.add_previous_agent(entry)
+            affected = self.get_adjacent_agent_indices(index)
+            for i in affected:
+                self.agents[i].happiness -= 5
             if self.visuals == True:
                 self.agents[index].entity.disable()
                 del(self.agents[index].entity)
@@ -1085,13 +1124,13 @@ class game_space:
         for index in range(len(self.agents)):
             self.agents[index].age += 1
             self.set_agent_temperature(index)
-            energy_drain = 1
+            energy_drain = self.agent_energy_drain
             temperature = self.agents[index].temperature
             if temperature > 34:
-                energy_drain += (temperature - 30) * 0.05
+                energy_drain += self.agent_energy_drain * ((temperature - 30) * 0.05)
                 self.agents[index].happiness -= 1
             if temperature < 4:
-                energy_drain += (5 - temperature) * 0.05
+                energy_drain += self.agent_energy_drain * ((5 - temperature) * 0.05)
                 self.agents[index].happiness -= 1
             self.agents[index].energy -= energy_drain
             if self.agents[index].energy <= 0:
@@ -1148,48 +1187,36 @@ class game_space:
         yv = self.agents[index].ypos
         predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
         predator_count = len(predators)
-        if predator_count > 0:
-            self.agents[index].happiness += 1
         return predator_count
 
     def get_visible_predators(self, index):
         xv, yv = self.get_viewpoint(index)
         predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance*2)
         predator_count = len(predators)
-        if predator_count > 0:
-            self.agents[index].happiness += 1
         return predator_count
 
     def get_predators_up(self, index):
         xv, yv = self.get_viewpoint_up(index)
         predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
         predator_count = len(predators)
-        if predator_count > 0:
-            self.agents[index].happiness += 1
         return predator_count
 
     def get_predators_right(self, index):
         xv, yv = self.get_viewpoint_right(index)
         predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
         predator_count = len(predators)
-        if predator_count > 0:
-            self.agents[index].happiness += 1
         return predator_count
 
     def get_predators_down(self, index):
         xv, yv = self.get_viewpoint_down(index)
         predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
         predator_count = len(predators)
-        if predator_count > 0:
-            self.agents[index].happiness += 1
         return predator_count
 
     def get_predators_left(self, index):
         xv, yv = self.get_viewpoint_left(index)
         predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
         predator_count = len(predators)
-        if predator_count > 0:
-            self.agents[index].happiness += 1
         return predator_count
 
     def predator_move_random(self, index):
@@ -1475,7 +1502,7 @@ class game_space:
         return self.agents[index].prev_action
 
     def get_own_age(self, index):
-        return self.agents[index].age
+        return self.agents[index].age/self.agent_start_energy
 
     def get_can_mate(self, index):
         ret = 0
@@ -1485,13 +1512,13 @@ class game_space:
         return ret
 
     def get_own_energy(self, index):
-        return self.agents[index].energy
+        return self.agents[index].energy/self.agent_start_energy
 
     def get_own_temperature(self, index):
-        return self.agents[index].temperature
+        return self.agents[index].temperature/40
 
     def get_food_inventory(self, index):
-        return self.agents[index].food_inventory
+        return self.agents[index].food_inventory/self.agent_max_inventory
 
     def get_distance_moved(self, index):
         return self.agents[index].distance_travelled
@@ -1506,7 +1533,7 @@ class game_space:
         return self.agents[index].ypos
 
     def get_own_orientation(self, index):
-        return self.agents[index].orient
+        return self.agents[index].orient/8
 
     def get_own_xvelocity(self, index):
         return self.agents[index].xvel
@@ -1515,7 +1542,7 @@ class game_space:
         return self.agents[index].yvel
 
     def get_environment_temperature(self, index):
-        return self.environment_temperature
+        return self.environment_temperature/40
 
     def get_visibility(self, index):
         return self.agent_view_distance
@@ -2305,6 +2332,10 @@ else:
         gs.step()
 
 # To do:
+# Normalize inputs
+# Start with a smaller number of inputs
+# Reward on high entropy action prob dist
+#
 # move params into a config dict
 # - measure effect of GA on training
 # - if GA has a neutral of positive effect, this shows that most of the agents
