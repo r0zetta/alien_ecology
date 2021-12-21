@@ -298,6 +298,7 @@ class Protector:
         self.inertial_damping = 0.80
         self.entity = None
         self.protection_entity = None
+        self.pulse_entity = None
 
 class Predator:
     def __init__(self, x, y, z):
@@ -353,7 +354,7 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[12],
+                 hidden_size=[16],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  learners=0.25,
@@ -370,7 +371,7 @@ class game_space:
                  agent_energy_drain=1,
                  agent_max_inventory=10,
                  num_protectors=3,
-                 protector_safe_distance=5,
+                 protector_safe_distance=7,
                  num_predators=5,
                  predator_view_distance=5,
                  predator_kill_distance=2,
@@ -472,15 +473,15 @@ class game_space:
         self.actions = [#"pick_food",
                         #"eat_food",
                         #"drop_food",
-                        #"rotate_right",
-                        #"rotate_left",
-                        #"flip",
-                        #"propel",
+                        "rotate_right",
+                        "rotate_left",
+                        "flip",
+                        "propel",
                         #"null",
-                        "propel_up",
-                        "propel_right",
-                        "propel_down",
-                        "propel_left",
+                        #"propel_up",
+                        #"propel_right",
+                        #"propel_down",
+                        #"propel_left",
                         #"mate",
                         #"freq_up",
                         #"freq_down",
@@ -509,17 +510,18 @@ class game_space:
                              "protectors_down",
                              "protectors_left",
                              "protector_in_range",
+                             "visible_protectors",
                              "predators_up",
                              "predators_right",
                              "predators_down",
                              "predators_left",
-                             #"visible_predators",
+                             "visible_predators",
                              #"previous_action",
                              #"own_energy",
                              #"own_temperature",
                              #"own_xposition",
                              #"own_yposition",
-                             #"own_orientation",
+                             "own_orientation",
                              #"own_xvelocity",
                              #"own_yvelocity",
                              #"food_inventory",
@@ -605,6 +607,10 @@ class game_space:
                                                           color=color.rgba(0,102,0,50),
                                                           scale=(s,s,s),
                                                           position = (xabs, yabs, zabs))
+        self.protectors[index].pulse_entity = Entity(model='sphere',
+                                                     color=color.rgba(0,102,0,30),
+                                                     scale=(s,s,s),
+                                                     position = (xabs, yabs, zabs))
 
     def set_predator_entity(self, index):
         xabs = self.predators[index].xpos
@@ -2495,7 +2501,10 @@ def update():
             yabs = gs.protectors[index].ypos
             zabs = gs.protectors[index].zpos
             gs.protectors[index].entity.position = (xabs, yabs, zabs)
+            pes = np.sin(gs.steps/10)*(gs.protector_safe_distance*2)
             gs.protectors[index].protection_entity.position = (xabs, yabs, zabs)
+            gs.protectors[index].pulse_entity.position = (xabs, yabs, zabs)
+            gs.protectors[index].pulse_entity.scale = (pes, pes, pes)
             orient = gs.protectors[index].orient
             gs.protectors[index].entity.rotation = (45*orient, 90, 0)
 
