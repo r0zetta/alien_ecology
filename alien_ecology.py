@@ -356,7 +356,7 @@ class game_space:
                  hidden_size=[12],
                  num_prev_states=1,
                  num_recent_actions=1000,
-                 learners=0.5,
+                 learners=0.25,
                  evaluate_learner_every=30,
                  mutation_rate=0.0001,
                  integer_weights=False,
@@ -365,7 +365,7 @@ class game_space:
                  year_period=10*50,
                  day_period=10,
                  weather_harshness=0,
-                 num_agents=20,
+                 num_agents=40,
                  agent_start_energy=200,
                  agent_energy_drain=1,
                  agent_max_inventory=10,
@@ -2472,6 +2472,8 @@ def update():
             xabs = gs.agents[index].xpos
             yabs = gs.agents[index].ypos
             zabs = gs.agents[index].zpos
+            s = 0.5 + ((gs.agents[index].energy/gs.agent_start_energy)*0.5)
+            gs.agents[index].entity.scale = (s,s,s)
             gs.agents[index].entity.position = (xabs, yabs, zabs)
             orient = gs.agents[index].orient
             gs.agents[index].entity.rotation = (45*orient, 90, 0)
