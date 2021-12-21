@@ -3,7 +3,11 @@ What follows is old news, some of which I've now figured out. For instance, putt
 
 Learning a policy quickly means reducing the inputs, hidden, and outputs to the smallest number of parameters. For instance, the evade policy was evolved in 15 minutes using an agent with 4 input, 8 hidden, and 4 output. Simple tasks can be accomplished in this way, but multi-step tasks are much more difficult to learn with sparse rewards. For instance, move to and eat food could not be learned quickly, whereas move to and stay near protector could be. Perhaps breaking down tasks into small, easily learnable blocks is the way to create fast learning policies?
 
+For now, I hope to leave the code in a state that allows anyone who downloads the repository to run and enjoy watching organisms evolve. When I figure out how to make them learn more complex tasks quickly, I'll update this repository.
+
 More to come...
+
+What follows is an account of attempting to get agents to learn multiple tasks, including hard tasks (such as find and eat food). The agents never learned to interact properly with the environment because they were bottlenecked by these hard tasks. But they shouldn't be hard to begin with. I'll re-introduce them once I figure out how to make these hard tasks straightforward for agents to learn.
 
 ## Introduction
 This repository contains code that implements an environment for simulated organisms to learn and evolve behaviours. The environment itself is a two-dimensional toroidal plane - organisms that travel over an edge appear at the opposite edge of the plane in a similar fashion to how pacman moves. The environment presents a number of problems the organisms must learn to solve:
