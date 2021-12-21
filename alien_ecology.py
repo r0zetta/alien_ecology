@@ -210,6 +210,11 @@ class Agent:
         self.model = GN_model(self.weights, self.learnable)
         self.state = None
         self.entity = None
+        self.trail_length = 3
+        self.trail_alphas = [100, 60, 30]
+        self.trail_entities = []
+        for _ in range(self.trail_length):
+            self.trail_entities.append(None)
         self.previous_stats = []
         self.reset()
 
@@ -278,6 +283,9 @@ class Agent:
         self.speed = 0.4
         self.previous_states = deque()
         self.previous_actions = []
+        self.previous_positions = deque()
+        for _ in range(self.trail_length):
+            self.previous_positions.append([self.xpos, self.ypos, self.orient, self.energy])
 
     def get_action(self):
         if self.sample == True:
@@ -362,7 +370,7 @@ class game_space:
                  mutation_rate=0.0001,
                  integer_weights=False,
                  weight_range=1,
-                 area_size=50,
+                 area_size=70,
                  year_period=10*50,
                  day_period=10,
                  weather_harshness=0,
@@ -460,7 +468,7 @@ class game_space:
         self.min_reproduction_age = min_reproduction_age
         self.min_reproduction_energy = min_reproduction_energy
         self.reproduction_cost = reproduction_cost
-        self.agent_view_distance = 5
+        self.agent_view_distance = 10
         self.visible_area = math.pi*(self.agent_view_distance**2)
         self.mutation_rate = mutation_rate
         self.agent_types = ["evolving",
@@ -687,13 +695,22 @@ class game_space:
         xabs = self.agents[index].xpos
         yabs = self.agents[index].ypos
         zabs = self.agents[index].zpos
-        s = 1
+        s = 0.5 + ((self.agents[index].energy/self.agent_start_energy)*0.5)
         texture = "textures/" + self.agents[index].color_str
         self.agents[index].entity = Entity(model='sphere',
                                            color=color.white,
                                            scale=(s,s,s),
                                            position = (xabs, yabs, zabs),
                                            texture=texture)
+        for n in range(self.agents[index].trail_length):
+            item = self.agents[index].previous_positions[n]
+            x, y, o, ss = item
+            ss = 0.5 + ((self.agents[index].energy/self.agent_start_energy)*0.5)
+            self.agents[index].trail_entities[n] = Entity( model='sphere',
+                                                           color=color.rgba(255,255,255,self.agents[index].trail_alphas[n]),
+                                                           scale=(ss,ss,ss),
+                                                           position = (x, y, zabs),
+                                                           texture=texture)
 
     def spawn_learning_agent(self, genome):
         self.spawn_new_agent(genome, True)
@@ -1213,12 +1230,16 @@ class game_space:
     def update_agent_position(self, index):
         x1 = self.agents[index].xpos
         y1 = self.agents[index].ypos
+        o = self.agents[index].orient
+        e = self.agents[index].energy
         x2 = x1 + self.agents[index].xvel
         y2 = y1 + self.agents[index].yvel
         d = self.distance(x1, y1, x2, y2)
         self.agents[index].distance_travelled += d
         self.agents[index].xpos = x2
         self.agents[index].ypos = y2
+        self.agents[index].previous_positions.popleft()
+        self.agents[index].previous_positions.append([x2, y2, o, e])
         if self.agents[index].xpos > self.area_size:
             self.agents[index].xpos -= self.area_size
         if self.agents[index].xpos < 0:
@@ -1287,7 +1308,7 @@ class game_space:
         return protector_count
 
     def protector_move_random(self, index):
-        action = random.choice([0,1,1,2,3])
+        action = random.choice([0,1,1,1,2,3])
         if action == 0:
             pass
         elif action == 1:
@@ -2470,7 +2491,8 @@ def update():
     c2 = int(50*tod)
     bgcs = [[0, c2, c1], [0,c1,c1], [c2, c1, 0], [c1, c1, 0], [c1, c2, 0]]
     bgc = bgcs[season]
-    window.color = color.rgb(*bgc)
+    #window.color = color.rgb(*bgc)
+    window.color = color.rgb(0,0,0)
 
     # Update agent positions
     for index, agent in enumerate(gs.agents):
@@ -2483,6 +2505,13 @@ def update():
             gs.agents[index].entity.position = (xabs, yabs, zabs)
             orient = gs.agents[index].orient
             gs.agents[index].entity.rotation = (45*orient, 90, 0)
+            for n in range(gs.agents[index].trail_length):
+                item = gs.agents[index].previous_positions[n]
+                x, y, o, ss = item
+                ss = 0.5 + ((gs.agents[index].energy/gs.agent_start_energy)*0.5)
+                gs.agents[index].trail_entities[n].position = (x, y, zabs)
+                gs.agents[index].trail_entities[n].rotation = (45*o, 90, 0)
+                gs.agents[index].trail_entities[n].scale = (ss, ss, ss)
 
     # Update predator positions
     for index, predator in enumerate(gs.predators):
