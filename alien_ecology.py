@@ -70,9 +70,9 @@ class Net(nn.Module):
             prob = m.log_prob(action)
             return action, value, prob
         else:
-            m = Categorical(probs)
-            action = m.sample()
-            #action = np.argmax(probs.detach().numpy())
+            #m = Categorical(probs)
+            #action = m.sample()
+            action = np.argmax(probs.detach().numpy())
             return action
 
 class GN_model:
@@ -285,6 +285,18 @@ class Agent:
         else:
             return self.model.get_action(self.state)
 
+class Protector:
+    def __init__(self, x, y, z):
+        self.xpos = x
+        self.ypos = y
+        self.zpos = z
+        self.xvel = 0
+        self.yvel = 0
+        self.speed = 0.1
+        self.visible = 5
+        self.orient = 0 # 0-7 in 45 degree increments
+        self.inertial_damping = 0.80
+
 class Predator:
     def __init__(self, x, y, z):
         self.xpos = x
@@ -338,7 +350,7 @@ class Pheromone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[16],
+                 hidden_size=[12],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  learners=0.5,
@@ -352,17 +364,19 @@ class game_space:
                  weather_harshness=0,
                  num_agents=20,
                  agent_start_energy=200,
-                 agent_energy_drain=0,
+                 agent_energy_drain=1,
                  agent_max_inventory=10,
+                 num_protectors=3,
+                 protector_safe_distance=5,
                  num_predators=5,
                  predator_view_distance=5,
                  predator_kill_distance=2,
-                 food_sources=20,
-                 food_spawns=20,
+                 food_sources=1,
+                 food_spawns=1,
                  food_dist=7,
                  food_repro_energy=15,
                  food_start_energy=10,
-                 food_energy_growth=2,
+                 food_energy_growth=5,
                  food_max_percent=0.05,
                  food_plant_success=0.5,
                  berry_max_age=100,
@@ -377,7 +391,7 @@ class game_space:
                  fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=0.9,
                  rebirth_genome_store=0.9,
-                 top_n=0.3,
+                 top_n=0.2,
                  save_every=2000,
                  record_every=50,
                  savedir="alien_ecology_save",
@@ -421,6 +435,8 @@ class game_space:
         self.agent_max_inventory = agent_max_inventory
         self.agent_start_energy = agent_start_energy
         self.agent_energy_drain = agent_energy_drain
+        self.num_protectors = num_protectors
+        self.protector_safe_distance = protector_safe_distance
         self.num_predators = num_predators
         self.predator_view_distance = predator_view_distance
         self.predator_kill_distance = predator_kill_distance
@@ -450,9 +466,9 @@ class game_space:
         for t in self.agent_types:
             self.agent_actions[t] = Counter()
             self.recent_actions[t] = deque()
-        self.actions = ["pick_food",
-                        "eat_food",
-                        "drop_food",
+        self.actions = [#"pick_food",
+                        #"eat_food",
+                        #"drop_food",
                         #"rotate_right",
                         #"rotate_left",
                         #"flip",
@@ -468,12 +484,12 @@ class game_space:
                         #"move_random",
                         #"emit_pheromone"
                         ]
-        self.observations = ["food_up",
-                             "food_right",
-                             "food_down",
-                             "food_left",
+        self.observations = [#"food_up",
+                             #"food_right",
+                             #"food_down",
+                             #"food_left",
                              #"visible_food",
-                             "food_pickable",
+                             #"food_pickable",
                              #"pheromone_up",
                              #"pheromone_right",
                              #"pheromone_down",
@@ -485,20 +501,25 @@ class game_space:
                              #"visible_agents",
                              #"can_mate",
                              #"mate_in_range",
+                             "protectors_up",
+                             "protectors_right",
+                             "protectors_down",
+                             "protectors_left",
+                             "protector_in_range",
                              "predators_up",
                              "predators_right",
                              "predators_down",
                              "predators_left",
                              #"visible_predators",
                              #"previous_action",
-                             "own_energy",
+                             #"own_energy",
                              #"own_temperature",
                              #"own_xposition",
                              #"own_yposition",
                              #"own_orientation",
                              #"own_xvelocity",
                              #"own_yvelocity",
-                             "food_inventory",
+                             #"food_inventory",
                              #"environment_temperature",
                              #"visibility",
                              #"reproduction_oscillator",
@@ -531,6 +552,7 @@ class game_space:
         self.previous_agents = deque()
         self.create_starting_food()
         self.create_predators()
+        self.create_protectors()
         self.create_genomes()
         self.agents = []
         num_learners = int(self.num_agents * self.learners)
@@ -543,6 +565,8 @@ class game_space:
     def step(self):
         self.set_environment_visibility()
         self.set_environment_temperature()
+        self.apply_protector_physics()
+        self.run_protector_actions()
         self.apply_predator_physics()
         self.run_predator_actions()
         self.set_agent_states()
@@ -563,6 +587,18 @@ class game_space:
 #########################
 # Initialization routines
 #########################
+    def set_protector_entity(self, index):
+        xabs = self.protectors[index].xpos
+        yabs = self.protectors[index].ypos
+        zabs = self.protectors[index].zpos
+        s = 2
+        texture = "textures/white"
+        self.protectors[index].entity = Entity(model='sphere',
+                                              color=color.white,
+                                              scale=(s,s,s),
+                                              position = (xabs, yabs, zabs),
+                                              texture=texture)
+
     def set_predator_entity(self, index):
         xabs = self.predators[index].xpos
         yabs = self.predators[index].ypos
@@ -575,6 +611,17 @@ class game_space:
                                               position = (xabs, yabs, zabs),
                                               texture=texture)
 
+    def spawn_random_protector(self):
+        xpos, ypos = self.get_safe_spawn_location()
+        zpos = -1
+        a = Protector(xpos,
+                     ypos,
+                     zpos)
+        self.protectors.append(a)
+        index = len(self.protectors)-1
+        if self.visuals == True:
+            self.set_protector_entity(index)
+
     def spawn_random_predator(self):
         xpos = random.random()*self.area_size
         ypos = random.random()*self.area_size
@@ -586,6 +633,11 @@ class game_space:
         index = len(self.predators)-1
         if self.visuals == True:
             self.set_predator_entity(index)
+
+    def create_protectors(self):
+        self.protectors = []
+        for n in range(self.num_protectors):
+            self.spawn_random_protector()
 
     def create_predators(self):
         self.predators = []
@@ -648,7 +700,6 @@ class game_space:
         return xpos, ypos
 
     def spawn_new_agent(self, genome, learner):
-        self.spawns += 1
         xpos, ypos = self.get_safe_spawn_location()
         zpos = -1
         color = 0
@@ -1115,6 +1166,7 @@ class game_space:
         if len(self.agents) < self.num_agents:
             deficit = self.num_agents - len(self.agents)
             for _ in range(deficit):
+                self.spawns += 1
                 genome = self.make_new_genome(0)
                 self.spawn_evolving_agent(genome)
 
@@ -1124,7 +1176,12 @@ class game_space:
         for index in range(len(self.agents)):
             self.agents[index].age += 1
             self.set_agent_temperature(index)
+            xpos = self.agents[index].xpos
+            ypos = self.agents[index].ypos
             energy_drain = self.agent_energy_drain
+            protectors = self.get_protectors_in_radius(xpos, ypos, self.protector_safe_distance)
+            if len(protectors) > 0:
+                energy_drain = -1
             temperature = self.agents[index].temperature
             if temperature > 34:
                 energy_drain += self.agent_energy_drain * ((temperature - 30) * 0.05)
@@ -1168,6 +1225,111 @@ class game_space:
     def apply_agent_inertial_damping(self, index):
         self.agents[index].xvel = self.agents[index].xvel * self.agents[index].inertial_damping
         self.agents[index].yvel = self.agents[index].yvel * self.agents[index].inertial_damping
+
+##################
+# Protector actions
+##################
+    def get_protectors_in_radius(self, xpos, ypos, radius):
+        ret = []
+        for i in range(len(self.protectors)):
+            ax = self.protectors[i].xpos
+            ay = self.protectors[i].ypos
+            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
+                if self.distance(xpos, ypos, ax, ay) <= radius:
+                    ret.append(i)
+        return ret
+
+    def get_surrounding_protectors(self, index):
+        xv = self.agents[index].xpos
+        yv = self.agents[index].ypos
+        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance)
+        protector_count = len(protectors)
+        return protector_count
+
+    def get_visible_protectors(self, index):
+        xv, yv = self.get_viewpoint(index)
+        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance*2)
+        protector_count = len(protectors)
+        return protector_count
+
+    def get_protectors_up(self, index):
+        xv, yv = self.get_viewpoint_up(index)
+        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance)
+        protector_count = len(protectors)
+        return protector_count
+
+    def get_protectors_right(self, index):
+        xv, yv = self.get_viewpoint_right(index)
+        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance)
+        protector_count = len(protectors)
+        return protector_count
+
+    def get_protectors_down(self, index):
+        xv, yv = self.get_viewpoint_down(index)
+        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance)
+        protector_count = len(protectors)
+        return protector_count
+
+    def get_protectors_left(self, index):
+        xv, yv = self.get_viewpoint_left(index)
+        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance)
+        protector_count = len(protectors)
+        return protector_count
+
+    def protector_move_random(self, index):
+        action = random.choice([0,1,1,2,3])
+        if action == 0:
+            pass
+        elif action == 1:
+            self.protector_propel(index)
+        elif action == 2:
+            self.protector_rotate_right(index)
+        else:
+            self.protector_rotate_left(index)
+
+    def protector_propel(self, index):
+        orient = self.protectors[index].orient
+        speed = self.protectors[index].speed
+        xvel = self.protectors[index].xvel
+        yvel = self.protectors[index].yvel
+        xv, yv = self.propel(xvel, yvel, orient, speed)
+        self.protectors[index].xvel = xv
+        self.protectors[index].yvel = yv
+
+    def protector_rotate_right(self, index):
+        self.protectors[index].orient += 1
+        if self.protectors[index].orient > 7:
+            self.protectors[index].orient = 0
+
+    def protector_rotate_left(self, index):
+        self.protectors[index].orient -= 1
+        if self.protectors[index].orient < 0:
+            self.protectors[index].orient = 7
+
+    def apply_protector_physics(self):
+        for index in range(len(self.protectors)):
+            self.apply_protector_inertial_damping(index)
+
+    def apply_protector_inertial_damping(self, index):
+        self.protectors[index].xvel = self.protectors[index].xvel * self.protectors[index].inertial_damping
+        self.protectors[index].yvel = self.protectors[index].yvel * self.protectors[index].inertial_damping
+
+    def update_protector_position(self, index):
+        self.protectors[index].xpos += self.protectors[index].xvel
+        if self.protectors[index].xpos > self.area_size:
+            self.protectors[index].xpos -= self.area_size
+        if self.protectors[index].xpos < 0:
+            self.protectors[index].xpos += self.area_size
+        self.protectors[index].ypos += self.protectors[index].yvel
+        if self.protectors[index].ypos > self.area_size:
+            self.protectors[index].ypos -= self.area_size
+        if self.protectors[index].ypos < 0:
+            self.protectors[index].ypos += self.area_size
+
+    def run_protector_actions(self):
+        for index in range(len(self.protectors)):
+            self.protector_move_random(index)
+            self.update_protector_position(index)
 
 ##################
 # Predator actions
@@ -1293,15 +1455,22 @@ class game_space:
                     self.reset_agents(reset)
                 if len(dead) > 0:
                     self.kill_agents(dead)
-            orient = self.predators[index].orient
-            distance = self.predator_view_distance
-            xv, yv = self.viewpoint(xpos, ypos, orient, distance)
-            # If agents in viewfield, move forward
-            targets = self.get_agents_in_radius(xv, yv, distance)
-            if len(targets) > 0:
-                self.predator_propel(index)
+            # If protectors are near to predators, stop predator's movement
+            # and prevent them from taking actions
+            # Note predators can still eat agents in this state
+            p = self.get_protectors_in_radius(xpos, ypos, self.protector_safe_distance)
+            if len(p) > 0:
+                self.apply_predator_inertial_damping(index)
             else:
-                self.predator_move_random(index)
+                orient = self.predators[index].orient
+                distance = self.predator_view_distance
+                xv, yv = self.viewpoint(xpos, ypos, orient, distance)
+                # If agents in viewfield, move forward
+                targets = self.get_agents_in_radius(xv, yv, distance)
+                if len(targets) > 0:
+                    self.predator_propel(index)
+                else:
+                    self.predator_move_random(index)
             self.update_predator_position(index)
 
 ###############
@@ -1370,12 +1539,26 @@ class game_space:
         return self.propel_agent_in_direction(index, 6)
 
     def action_pick_food(self, index):
+        xpos = self.agents[index].xpos
+        ypos = self.agents[index].ypos
+        if "eat_food" not in self.actions:
+            fi, fval = self.get_nearest_food(xpos, ypos)
+            if fi is not None:
+                if fval <= 1:
+                    if self.agents[index].energy <= self.agent_start_energy:
+                        self.food_eaten += 1
+                        self.agents[index].energy += 20
+                        self.agents[index].happiness += 100
+                        self.food[fi].energy = -1
+                        if self.food[fi].energy < 0:
+                            self.remove_food(fi)
+                        return 1
+            self.agents[index].happiness -= 1
+            return 0
         carrying = self.agents[index].food_inventory
         if carrying >= self.agent_max_inventory:
             self.agents[index].happiness -= 5
             return 0
-        xpos = self.agents[index].xpos
-        ypos = self.agents[index].ypos
         bi, bval = self.get_nearest_berry(xpos, ypos)
         if bi is not None:
             if bval <= 1:
@@ -1497,6 +1680,14 @@ class game_space:
             val = class_method(index)
             observations.append(val)
         return observations
+
+    def get_protector_in_range(self, index):
+        xpos = self.agents[index].xpos
+        ypos = self.agents[index].ypos
+        p = self.get_protectors_in_radius(xpos, ypos, self.protector_safe_distance)
+        if len(p) > 0:
+            return 1
+        return 0
 
     def get_previous_action(self, index):
         return self.agents[index].prev_action
@@ -2293,6 +2484,16 @@ def update():
             orient = gs.predators[index].orient
             gs.predators[index].entity.rotation = (45*orient, 90, 0)
 
+    # Update predator positions
+    for index, protector in enumerate(gs.protectors):
+        if gs.protectors[index].entity is not None:
+            xabs = gs.protectors[index].xpos
+            yabs = gs.protectors[index].ypos
+            zabs = gs.protectors[index].zpos
+            gs.protectors[index].entity.position = (xabs, yabs, zabs)
+            orient = gs.protectors[index].orient
+            gs.protectors[index].entity.rotation = (45*orient, 90, 0)
+
 
 # Train the game
 random.seed(1337)
@@ -2335,6 +2536,12 @@ else:
 # Normalize inputs
 # Start with a smaller number of inputs
 # Reward on high entropy action prob dist
+#
+# Idea:
+# protector that moves randomly
+# predators cannot get close to it
+# agents replenish health when near it
+# agents should learn to stay near it
 #
 # move params into a config dict
 # - measure effect of GA on training
