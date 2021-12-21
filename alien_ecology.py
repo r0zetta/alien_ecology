@@ -296,6 +296,8 @@ class Protector:
         self.visible = 5
         self.orient = 0 # 0-7 in 45 degree increments
         self.inertial_damping = 0.80
+        self.entity = None
+        self.protection_entity = None
 
 class Predator:
     def __init__(self, x, y, z):
@@ -308,6 +310,7 @@ class Predator:
         self.visible = 5
         self.orient = 0 # 0-7 in 45 degree increments
         self.inertial_damping = 0.70
+        self.entity = None
 
 class Food:
     def __init__(self, x, y, z, energy):
@@ -591,13 +594,17 @@ class game_space:
         xabs = self.protectors[index].xpos
         yabs = self.protectors[index].ypos
         zabs = self.protectors[index].zpos
-        s = 2
+        s = self.protector_safe_distance*2
         texture = "textures/white"
         self.protectors[index].entity = Entity(model='sphere',
                                               color=color.white,
-                                              scale=(s,s,s),
+                                              scale=(2,2,2),
                                               position = (xabs, yabs, zabs),
                                               texture=texture)
+        self.protectors[index].protection_entity = Entity(model='sphere',
+                                                          color=color.rgba(0,102,0,50),
+                                                          scale=(s,s,s),
+                                                          position = (xabs, yabs, zabs))
 
     def set_predator_entity(self, index):
         xabs = self.predators[index].xpos
@@ -1549,9 +1556,7 @@ class game_space:
                         self.food_eaten += 1
                         self.agents[index].energy += 20
                         self.agents[index].happiness += 100
-                        self.food[fi].energy = -1
-                        if self.food[fi].energy < 0:
-                            self.remove_food(fi)
+                        self.remove_food(fi)
                         return 1
             self.agents[index].happiness -= 1
             return 0
@@ -2491,6 +2496,7 @@ def update():
             yabs = gs.protectors[index].ypos
             zabs = gs.protectors[index].zpos
             gs.protectors[index].entity.position = (xabs, yabs, zabs)
+            gs.protectors[index].protection_entity.position = (xabs, yabs, zabs)
             orient = gs.protectors[index].orient
             gs.protectors[index].entity.rotation = (45*orient, 90, 0)
 
