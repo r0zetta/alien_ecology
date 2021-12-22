@@ -278,6 +278,13 @@ class Agent:
         else:
             return self.model.get_action(self.state)
 
+class Food:
+    def __init__(self, x, y, z):
+        self.xpos = x
+        self.ypos = y
+        self.zpos = z
+        self.entity = None
+
 class Protector:
     def __init__(self, x, y, z):
         self.xpos = x
@@ -342,6 +349,8 @@ class game_space:
                  num_predators=8,
                  predator_view_distance=5,
                  predator_kill_distance=2,
+                 use_food=True,
+                 num_food=20,
                  use_zones=True,
                  visuals=False,
                  num_previous_agents=200,
@@ -390,6 +399,8 @@ class game_space:
         self.num_predators = num_predators
         self.predator_view_distance = predator_view_distance
         self.predator_kill_distance = predator_kill_distance
+        self.use_food = use_food
+        self.num_food = num_food
         self.use_zones = use_zones
         self.agent_view_distance = agent_view_distance
         self.visible_area = math.pi*(self.agent_view_distance**2)
@@ -406,7 +417,7 @@ class game_space:
                         #"rotate_left",
                         #"flip",
                         #"propel",
-                        "null",
+                        #"null",
                         "propel_up",
                         "propel_right",
                         "propel_down",
@@ -418,6 +429,11 @@ class game_space:
                              #"agents_down",
                              #"agents_left",
                              #"visible_agents",
+                             "food_up",
+                             "food_right",
+                             "food_down",
+                             "food_left",
+                             #"visible_food",
                              "protectors_up",
                              "protectors_right",
                              "protectors_down",
@@ -450,6 +466,7 @@ class game_space:
                             ['repulsor',75, 25, 15, 0.2],
                             ['damping', 50, 50, 15, 0.1]]
         self.spawn_zones()
+        self.spawn_food()
         self.previous_agents = deque()
         self.create_predators()
         self.create_protectors()
@@ -906,6 +923,13 @@ class game_space:
             self.agents[index].age += 1
             xpos = self.agents[index].xpos
             ypos = self.agents[index].ypos
+            if self.use_food == True:
+                nearby_food = self.get_food_in_radius(xpos, ypos, 1)
+                if len(nearby_food) > 0:
+                    fi = random.choice(nearby_food)
+                    self.respawn_food(fi)
+                    self.agents[index].energy += 50
+                    # Record reward?
             energy_drain = self.agent_energy_drain
             protectors = self.get_protectors_in_radius(xpos, ypos, self.protector_safe_distance)
             if len(protectors) > 0:
@@ -1082,14 +1106,6 @@ class game_space:
             observations.append(val)
         return observations
 
-    def get_protector_in_range(self, index):
-        xpos = self.agents[index].xpos
-        ypos = self.agents[index].ypos
-        p = self.get_protectors_in_radius(xpos, ypos, self.protector_safe_distance)
-        if len(p) > 0:
-            return 1
-        return 0
-
     def get_own_energy(self, index):
         return self.agents[index].energy/self.agent_start_energy
 
@@ -1131,6 +1147,14 @@ class game_space:
         index = len(self.protectors)-1
         if self.visuals == True:
             self.set_protector_entity(index)
+
+    def get_protector_in_range(self, index):
+        xpos = self.agents[index].xpos
+        ypos = self.agents[index].ypos
+        p = self.get_protectors_in_radius(xpos, ypos, self.protector_safe_distance)
+        if len(p) > 0:
+            return 1
+        return 0
 
     def get_protectors_in_radius(self, xpos, ypos, radius):
         ret = []
@@ -1487,6 +1511,89 @@ class game_space:
                                                  color=color.rgba(*c),
                                                  scale=(s,s,s),
                                                  position = (xabs, yabs, zabs))
+
+#################
+# Food routines
+#################
+    def spawn_food(self):
+        if self.use_food == False:
+            return
+        self.food = []
+        for index in range(self.num_food):
+            xpos = random.random()*self.area_size
+            ypos = random.random()*self.area_size
+            zpos = -1
+            food = Food(xpos, ypos, zpos)
+            self.food.append(food)
+            if self.visuals == True:
+                self.set_food_entity(index)
+
+    def respawn_food(self, index):
+        xpos = random.random()*self.area_size
+        ypos = random.random()*self.area_size
+        self.food[index].xpos = xpos
+        self.food[index].ypos = ypos
+        zpos = -1
+        if self.visuals == True:
+            self.food[index].entity.position=(xpos, ypos, zpos)
+
+    def get_food_in_radius(self, xpos, ypos, radius):
+        ret = []
+        for i in range(len(self.food)):
+            ax = self.food[i].xpos
+            ay = self.food[i].ypos
+            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
+                if self.distance(xpos, ypos, ax, ay) <= radius:
+                    ret.append(i)
+        return ret
+
+    def get_surrounding_food(self, index):
+        xv = self.agents[index].xpos
+        yv = self.agents[index].ypos
+        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
+        food_count = len(food)
+        return food_count
+
+    def get_visible_food(self, index):
+        xv, yv = self.get_viewpoint(index)
+        food = self.get_food_in_radius(xv, yv, self.agent_view_distance*2)
+        food_count = len(food)
+        return food_count
+
+    def get_food_up(self, index):
+        xv, yv = self.get_viewpoint_up(index)
+        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
+        food_count = len(food)
+        return food_count
+
+    def get_food_right(self, index):
+        xv, yv = self.get_viewpoint_right(index)
+        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
+        food_count = len(food)
+        return food_count
+
+    def get_food_down(self, index):
+        xv, yv = self.get_viewpoint_down(index)
+        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
+        food_count = len(food)
+        return food_count
+
+    def get_food_left(self, index):
+        xv, yv = self.get_viewpoint_left(index)
+        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
+        food_count = len(food)
+        return food_count
+
+    def set_food_entity(self, index):
+        xabs = self.food[index].xpos
+        yabs = self.food[index].ypos
+        zabs = self.food[index].zpos
+        s = 1
+        c = [255, 153, 51, 120]
+        self.food[index].entity = Entity(model='sphere',
+                                         color=color.rgba(*c),
+                                         scale=(s,s,s),
+                                         position = (xabs, yabs, zabs))
 
 ########################################
 # Routines related to genetic algorithms
