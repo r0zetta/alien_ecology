@@ -20,9 +20,11 @@ The purpose of this simulation is:
 
 ## Experiment 1: evade predators
 
-## Experiment 2: follow protectors
+## Experiment 2: collect food
 
-## Experiment 3: attractor, repulsor, and damping zones in simulation
+## Experiment 2: evade predators and follow protectors
+
+## Experiment 3: attractor, repulsor, and damping zones added
 
 
 ## Findings
@@ -57,6 +59,7 @@ All other options will require editing the file itself, since I didn't bother pa
 - **respawn_genome_store** - when evolving agents are respawned, how likely are their new genomes to come from genome_store instead of previous_agents
 - **rebirth_genome_store** - same as above but for learning agents
 - **top_n** defines the portion of genomes to select from either previous_agents or genome_store when reproducing or spawning new agents
+- **integer_weights** and **weight_range** are parameters to set the randomly generated weights for new genomes. A default setting of **weight_range=1** with **integer_weights=False** will generate float weights between -1.0 and 1.0. Setting **integer_weights=True** will generate genomes containing values of -1.0, 0.0. and 1.0. Setting **weight_range** to a higher value of n (e.g. 2) will cause weights between -n and n to be generated.
 
 Note that you can also change the simulation by commenting out items in self.actions and/or self.observations.
 
