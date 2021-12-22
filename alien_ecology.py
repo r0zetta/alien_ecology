@@ -330,7 +330,7 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[16],
+                 hidden_size=[20],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  learners=0.50,
@@ -338,21 +338,22 @@ class game_space:
                  mutation_rate=0.0001,
                  integer_weights=True,
                  weight_range=1,
-                 area_size=100,
-                 num_agents=40,
+                 area_size=70,
+                 num_agents=20,
                  agent_start_energy=200,
                  agent_energy_drain=1,
                  agent_max_inventory=10,
                  agent_view_distance=5,
-                 num_protectors=4,
-                 protector_safe_distance=7,
-                 num_predators=8,
+                 num_protectors=2,
+                 protector_safe_distance=5,
+                 num_predators=4,
                  predator_view_distance=5,
                  predator_kill_distance=2,
                  use_food=True,
                  num_food=20,
                  use_zones=True,
                  visuals=False,
+                 pulse_zones=False,
                  num_previous_agents=200,
                  genome_store_size=200,
                  fitness_index=2, # 1: fitness, 2: age
@@ -383,6 +384,7 @@ class game_space:
         self.integer_weights = integer_weights
         self.weight_range = weight_range
         self.visuals = visuals
+        self.pulse_zones = pulse_zones
         self.savedir = savedir
         self.statsdir = statsdir
         self.stats = {}
@@ -460,11 +462,20 @@ class game_space:
         self.genome_size += self.hidden_size[-1]
         self.genome_store = []
         self.zone_types = ['attractor', 'repulsor', 'damping', 'acceleration']
-        self.zone_config = [['attractor',25, 25, 15, 0.2],
-                            ['attractor', 75, 75, 15, 0.2],
-                            ['repulsor', 25, 75, 15, 0.2],
-                            ['repulsor',75, 25, 15, 0.2],
-                            ['damping', 50, 50, 15, 0.1]]
+        lpos = self.area_size*0.2
+        rpos = self.area_size*0.8
+        mpos = self.area_size*0.5
+        big = self.area_size*0.15
+        small = self.area_size*0.04
+        self.zone_config = [['attractor', lpos, lpos, big, 0.2],
+                            ['attractor', rpos, rpos, big, 0.2],
+                            ['repulsor', lpos, rpos, big, 0.2],
+                            ['repulsor', rpos, lpos, big, 0.2],
+                            ['repulsor', mpos, lpos, small, 2.0],
+                            ['repulsor', mpos, rpos, small, 2.0],
+                            ['repulsor', lpos, mpos, small, 2.0],
+                            ['repulsor', rpos, mpos, small, 2.0],
+                            ['damping', mpos, mpos, big, 0.1]]
         self.spawn_zones()
         self.spawn_food()
         self.previous_agents = deque()
@@ -486,7 +497,7 @@ class game_space:
         self.run_predator_actions()
         self.apply_zone_effects()
         self.set_agent_states()
-        self.make_new_states()
+        #self.make_new_states()
         self.apply_agent_physics()
         self.run_agent_actions()
         self.update_agent_status()
@@ -1501,7 +1512,7 @@ class game_space:
         ztype = self.zones[index].ztype
         s = self.zones[index].radius * 2
         c = self.zones[index].zone_colors[ztype]
-        alpha = 30
+        alpha = self.zones[index].strength*150
         c.append(alpha)
         self.zones[index].entity = Entity(model='sphere',
                                           color=color.rgba(*c),
@@ -1865,7 +1876,7 @@ class game_space:
         msg += "  learning: " + str(l_agents)
         msg += "  evolving: " + str(e_agents)
         msg += "\n\n"
-        msg += self.print_new_state_stats()
+        #msg += self.print_new_state_stats()
         msg += self.print_spawn_stats()
         msg += self.make_labels(self.previous_agents, "Previous ", "prev")
         msg += "Top " + str(pss) + " previous agents: learning: " + str(bpal)
@@ -1932,17 +1943,19 @@ def update():
             yabs = gs.protectors[index].ypos
             zabs = gs.protectors[index].zpos
             gs.protectors[index].entity.position = (xabs, yabs, zabs)
-            pes = abs(np.sin(gs.steps/10))*(gs.protector_safe_distance*2)
             gs.protectors[index].protection_entity.position = (xabs, yabs, zabs)
             gs.protectors[index].pulse_entity.position = (xabs, yabs, zabs)
-            gs.protectors[index].pulse_entity.scale = (pes, pes, pes)
+            if gs.pulse_zones == True:
+                pes = abs(np.sin(gs.steps/10))*(gs.protector_safe_distance*2)
+                gs.protectors[index].pulse_entity.scale = (pes, pes, pes)
             orient = gs.protectors[index].orient
             gs.protectors[index].entity.rotation = (45*orient, 90, 0)
 
-    for index, zone in enumerate(gs.zones):
-        radius = gs.zones[index].radius
-        pes = abs(np.sin(gs.steps/10))*(radius*2)
-        gs.zones[index].radius_entity.scale = (pes, pes, pes)
+    if gs.pulse_zones == True:
+        for index, zone in enumerate(gs.zones):
+            radius = gs.zones[index].radius
+            pes = abs(np.sin(gs.steps/10))*(radius*2)
+            gs.zones[index].radius_entity.scale = (pes, pes, pes)
 
 
 # Train the game
