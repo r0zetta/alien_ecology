@@ -22,24 +22,27 @@ The purpose of this simulation is:
 This simulation contains only agents and predators. The agent's state includes readings of the number of predators above, below, to the left, and to the right of the agent, within the agent's maximum view distance (state size 4, action size 4, hidden size [8], parameters 72). Agents learn to run away from predators, and this policy can be learned quickly. Evolutionary processes find optimal policies much quicker than reinforcement learning mechanisms.
 
 ## Experiment 2: collect food
-This simulation contains only agents and food. Agents receive a reading of number of food above, below, to the left, and to the right of the agent, and their own energy value (state size 4, action size 4, hidden size [8], parameters 72).
+This simulation contains only agents and food. Agents start with 200 energy and lose 1 energy per step. Colliding with food grants the agent 50 energy and causes the food to respawn in a new random location. Agents receive a reading of number of food above, below, to the left, and to the right of the agent, and their own energy value (state size 4, action size 4, hidden size [8], parameters 72).
+
+## Experiment 2.5: apply collect food policy to follow protector scenario
 
 ## Experiment 3: follow protectors
-This simulation contains only agents and protectors. Agents receive a reading of number of protectors above, below, to the left, and to the right of the agent, and their own energy value (state size 4, action size 4, hidden size [8], parameters 72).
+This simulation contains only agents and protectors. Agents do not lose energy over time, and are thus rewarded for achieveing longer lifespans. Agents receive a reading of number of protectors above, below, to the left, and to the right of the agent (state size 4, action size 4, hidden size [8], parameters 72).
 
 ## Experiment 4: evade predators and follow protectors
-This simulation contains both predators and protectors. Agents receive readings about nearby protectors and predators, their current energy, and a flag that indicates whether they are within the healing field of a protector (state size 10).
+This simulation contains both predators and protectors. Agents lose energy over time and are thus rewarded for regaining energy by staying close to protectors. Agents receive readings about nearby protectors and predators and a flag that indicates whether they are within the healing field of a protector (state size 9).
 
 ## Experiment 5: attractor, repulsor, and damping zones added
-This experiment combines all of the previous, and contains predators, protectors, and food (state size 14). The simulation environment also contains zones that affect the agents' movement. Attractor zones pull agents to the center, repulsor zones push agents away, damping zones slow agents down, and acceleration zones speed them up. Agents do not receive readings about these zones, and must learn policies despite their effects.
-
+This experiment combines all of the previous, and contains predators, protectors, and food (state size 13). The simulation environment also contains zones that affect the agents' movement. Attractor zones pull agents to the center, repulsor zones push agents away, damping zones slow agents down, and acceleration zones speed them up. Agents do not receive readings about these zones, and must learn policies despite their effects. Predators and protectors are unaffected by these zones.
 
 ## Findings
-When presented with a small state space and limited action space, agents quickly learned good policies for certain tasks, such as evading predators or staying close to protectors. However, certain other simple tasks such as finding and eating food were not learned.
+When presented with a small state space and limited action space, agents quickly learned good policies for certain tasks, such as evading predators, staying close to protectors and colliding with food pellets. These simple tasks can be somewhat similar - for instance, the food search and follow protector tasks both require agents to move in the direction of a perceived signal.
 
-The evade policy was evolved in 15 minutes using an agent with 4 input, 8 hidden, and 4 output. Simple tasks can be accomplished in this way, but multi-step tasks are much more difficult to learn with sparse rewards. For instance, move to and eat food could not be learned quickly, whereas move to and stay near protector could be. Perhaps breaking down tasks into small, easily learnable blocks is the way to create fast learning policies?
+It would be interesting to discover whether the policy learned for collecting food would work out-of-the-box in the scenario that requires agents to locate the follow a protector.
 
-For now, I hope to leave the code in a state that allows anyone who downloads the repository to run and enjoy watching organisms evolve. When I figure out how to make them learn more complex tasks quickly, I'll update this repository.
+Multi-step tasks were much more difficult to learn due the the number of inputs and the sparse rewards. Perhaps breaking down tasks into small, easily learnable blocks is the way to create fast learning policies? Instead of training an agent on the complex task, might there be a way of training multiple models on sub-tasks and then combining them to solve the more complex task?
+
+For now, I hope to leave the code in a state that allows anyone who downloads the repository to run and enjoy watching organisms evolve. I'll update this repository with new findings and discoveries as I make them.
 
 
 # Technical details
