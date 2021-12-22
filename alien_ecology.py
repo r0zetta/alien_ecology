@@ -15,12 +15,9 @@ class Net(nn.Module):
         self.l = l
         self.fc_layers = nn.ModuleList()
         for item in self.w:
-            #s1, s2, d, b = item
             s1, s2, d = item
             fc = nn.Linear(s1, s2, bias=False)
-            #fc = nn.Linear(s1, s2)
             fc.weight.data = d
-            #fc.bias.data = b
             self.fc_layers.append(fc)
 
     def forward(self, x):
@@ -49,18 +46,13 @@ class Net(nn.Module):
             d = fc.weight.data.detach().numpy()
             d = list(np.ravel(d))
             w.extend(d)
-            #b = fc.bias.data.detach().numpy()
-            #b = list(np.ravel(b))
-            #w.extend(b)
         return w
 
     def set_w(self, w):
         self.w = w
         for i, item in enumerate(self.w):
-            #s1, s2, d, b = item
             s1, s2, d = item
             self.fc_layers[i].weight.data = d
-            #self.fc_layers[i].bias.data = b
 
     def get_action(self, state):
         probs, value = self.forward(state)
@@ -81,7 +73,7 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-3)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-2)
             self.reset()
 
     def num_params(self):
@@ -342,20 +334,19 @@ class game_space:
                  area_size=70,
                  num_agents=20,
                  agent_start_energy=200,
-                 agent_energy_drain=1,
-                 agent_max_inventory=10,
+                 agent_energy_drain=0,
                  agent_view_distance=5,
                  num_protectors=0,
                  protector_safe_distance=5,
-                 num_predators=0,
+                 num_predators=8,
                  predator_view_distance=6,
                  predator_kill_distance=2,
-                 num_food=20,
+                 num_food=0,
                  use_zones=False,
                  visuals=False,
                  pulse_zones=False,
-                 num_previous_agents=200,
-                 genome_store_size=200,
+                 num_previous_agents=100,
+                 genome_store_size=100,
                  fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=0.9,
                  rebirth_genome_store=0.9,
@@ -430,10 +421,10 @@ class game_space:
                              #"agents_down",
                              #"agents_left",
                              #"visible_agents",
-                             "food_up",
-                             "food_right",
-                             "food_down",
-                             "food_left",
+                             #"food_up",
+                             #"food_right",
+                             #"food_down",
+                             #"food_left",
                              #"visible_food",
                              #"protectors_up",
                              #"protectors_right",
@@ -441,12 +432,12 @@ class game_space:
                              #"protectors_left",
                              #"protector_in_range",
                              #"visible_protectors",
-                             #"predators_up",
-                             #"predators_right",
-                             #"predators_down",
-                             #"predators_left",
+                             "predators_up",
+                             "predators_right",
+                             "predators_down",
+                             "predators_left",
                              #"visible_predators",
-                             "own_energy",
+                             #"own_energy",
                              ]
         self.hidden_size = hidden_size
         self.action_size = len(self.actions)
@@ -565,6 +556,23 @@ class game_space:
         yvel = min(yvel, (speed*5))
         return xvel, yvel
 
+    def update_position(self, xpos, ypos):
+        return self.update_position_toroid(xpos, ypos)
+
+
+    def update_position_toroid(self, xpos, ypos):
+        nx = xpos
+        ny = ypos
+        if nx > self.area_size:
+            nx -= self.area_size
+        if nx < 0:
+            nx += self.area_size
+        if ny > self.area_size:
+            ny -= self.area_size
+        if ny < 0:
+            ny += self.area_size
+        return nx, ny
+
     def viewpoint(self, xpos, ypos, orient, distance):
         xv = xpos
         yv = ypos
@@ -665,32 +673,6 @@ class game_space:
                 bestx = xpos
                 besty = ypos
         return bestx, besty
-
-    def create_genomes(self):
-        self.genome_pool = []
-        if os.path.exists(savedir + "/genome_store.pkl"):
-            print("Loading genomes.")
-            self.load_genomes()
-        if len(self.genome_store) >= self.num_agents:
-            self.genome_pool = self.get_best_genomes_from_store(self.num_agents, None)
-        else:
-            if len(self.genome_store) > 0:
-                self.genome_pool = [x[0] for x in self.genome_store]
-        if len(self.genome_pool) < self.num_agents:
-            m = self.num_agents - len(self.genome_pool)
-            print("Creating " + str(m) + " random genomes.")
-            g = self.make_random_genomes(m)
-            self.genome_pool.extend(g)
-
-    def save_genomes(self):
-        if len(self.genome_store) < 1:
-            return
-        with open(self.savedir + "/genome_store.pkl", "wb") as f:
-            f.write(pickle.dumps(self.genome_store))
-
-    def load_genomes(self):
-        with open(self.savedir + "/genome_store.pkl", "rb") as f:
-            self.genome_store = pickle.load(f)
 
 ########################
 # Agent runtime routines
@@ -969,18 +951,11 @@ class game_space:
         y2 = y1 + self.agents[index].yvel
         d = self.distance(x1, y1, x2, y2)
         self.agents[index].distance_travelled += d
-        self.agents[index].xpos = x2
-        self.agents[index].ypos = y2
+        nx, ny = self.update_position(x2, y2)
+        self.agents[index].xpos = nx
+        self.agents[index].ypos = ny
         self.agents[index].previous_positions.popleft()
         self.agents[index].previous_positions.append([x2, y2, o, e])
-        if self.agents[index].xpos > self.area_size:
-            self.agents[index].xpos -= self.area_size
-        if self.agents[index].xpos < 0:
-            self.agents[index].xpos += self.area_size
-        if self.agents[index].ypos > self.area_size:
-            self.agents[index].ypos -= self.area_size
-        if self.agents[index].ypos < 0:
-            self.agents[index].ypos += self.area_size
 
     def apply_agent_physics(self):
         for index in range(len(self.agents)):
@@ -1257,16 +1232,13 @@ class game_space:
         self.protectors[index].yvel = self.protectors[index].yvel * self.protectors[index].inertial_damping
 
     def update_protector_position(self, index):
-        self.protectors[index].xpos += self.protectors[index].xvel
-        if self.protectors[index].xpos > self.area_size:
-            self.protectors[index].xpos -= self.area_size
-        if self.protectors[index].xpos < 0:
-            self.protectors[index].xpos += self.area_size
-        self.protectors[index].ypos += self.protectors[index].yvel
-        if self.protectors[index].ypos > self.area_size:
-            self.protectors[index].ypos -= self.area_size
-        if self.protectors[index].ypos < 0:
-            self.protectors[index].ypos += self.area_size
+        xpos = self.protectors[index].xpos 
+        xpos += self.protectors[index].xvel
+        ypos = self.protectors[index].ypos
+        ypos += self.protectors[index].yvel
+        xpos, ypos = self.update_position(xpos, ypos)
+        self.protectors[index].xpos = xpos
+        self.protectors[index].ypos = ypos
 
     def run_protector_actions(self):
         for index in range(len(self.protectors)):
@@ -1389,16 +1361,13 @@ class game_space:
         self.predators[index].yvel = self.predators[index].yvel * self.predators[index].inertial_damping
 
     def update_predator_position(self, index):
-        self.predators[index].xpos += self.predators[index].xvel
-        if self.predators[index].xpos > self.area_size:
-            self.predators[index].xpos -= self.area_size
-        if self.predators[index].xpos < 0:
-            self.predators[index].xpos += self.area_size
-        self.predators[index].ypos += self.predators[index].yvel
-        if self.predators[index].ypos > self.area_size:
-            self.predators[index].ypos -= self.area_size
-        if self.predators[index].ypos < 0:
-            self.predators[index].ypos += self.area_size
+        xpos = self.predators[index].xpos 
+        xpos += self.predators[index].xvel
+        ypos = self.predators[index].ypos
+        ypos += self.predators[index].yvel
+        xpos, ypos = self.update_position(xpos, ypos)
+        self.predators[index].xpos = xpos
+        self.predators[index].ypos = ypos
 
     def run_predator_actions(self):
         for index in range(len(self.predators)):
@@ -1613,6 +1582,32 @@ class game_space:
 ########################################
 # Routines related to genetic algorithms
 ########################################
+    def create_genomes(self):
+        self.genome_pool = []
+        if os.path.exists(savedir + "/genome_store.pkl"):
+            print("Loading genomes.")
+            self.load_genomes()
+        if len(self.genome_store) >= self.num_agents:
+            self.genome_pool = self.get_best_genomes_from_store(self.num_agents, None)
+        else:
+            if len(self.genome_store) > 0:
+                self.genome_pool = [x[0] for x in self.genome_store]
+        if len(self.genome_pool) < self.num_agents:
+            m = self.num_agents - len(self.genome_pool)
+            print("Creating " + str(m) + " random genomes.")
+            g = self.make_random_genomes(m)
+            self.genome_pool.extend(g)
+
+    def save_genomes(self):
+        if len(self.genome_store) < 1:
+            return
+        with open(self.savedir + "/genome_store.pkl", "wb") as f:
+            f.write(pickle.dumps(self.genome_store))
+
+    def load_genomes(self):
+        with open(self.savedir + "/genome_store.pkl", "rb") as f:
+            self.genome_store = pickle.load(f)
+
     def make_random_genome(self):
         if self.integer_weights == False:
             return np.random.uniform(-1*self.weight_range, self.weight_range, self.genome_size)
@@ -1740,6 +1735,22 @@ class game_space:
         else:
             return self.make_genome_from_previous(atype)
 
+    def get_genetic_diversity(self):
+        if len(self.genome_store) < self.genome_store_size:
+            return []
+        unique = set()
+        for index in range(len(self.genome_store)):
+            gen = self.genome_store[index][0]
+            msg = ""
+            for g in gen:
+                c = "Z"
+                if int(g) == -1:
+                    c = "M"
+                elif int(g) == 1:
+                    c = "P"
+                msg += c
+            unique.add(msg)
+        return list(unique)
 
 
 ######################
@@ -1889,6 +1900,10 @@ class game_space:
         msg += "Top " + str(gss) + " agents in genome store: learning: " + str(gsal)
         msg += "  evolving: " + str(gsae)
         msg += "\n\n"
+        gsd = self.get_genetic_diversity()
+        self.record_stats("genetic diversity", len(gsd))
+        msg += "Genetic diversity: " + str(len(gsd))
+        msg += "\n"
         msg += "Items in genome store: " + str(gsitems)
         msg += "\n"
         msg += self.make_labels(self.genome_store, "Genome store ", "gs")
