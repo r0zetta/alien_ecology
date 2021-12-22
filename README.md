@@ -30,7 +30,7 @@ This simulation contains only agents and food. Agents start with 200 energy and 
 This simulation contains only agents and protectors. Agents do not lose energy over time, and are thus rewarded for achieveing longer lifespans. Agents receive a reading of number of protectors above, below, to the left, and to the right of the agent (state size 4, action size 4, hidden size [8], parameters 72).
 
 ## Experiment 4: evade predators and follow protectors
-This simulation contains both predators and protectors. Agents lose energy over time and are thus rewarded for regaining energy by staying close to protectors. Agents receive readings about nearby protectors and predators and a flag that indicates whether they are within the healing field of a protector (state size 9).
+This simulation contains both predators and protectors. Agents lose energy over time and are thus rewarded for regaining energy by staying close to protectors. Agents receive readings about nearby protectors and predators and a flag that indicates whether they are within the healing field of a protector (state size 9, action size 4, hidden size 16, parameters 224).
 
 ## Experiment 5: attractor, repulsor, and damping zones added
 This experiment combines all of the previous, and contains predators, protectors, and food (state size 13). The simulation environment also contains zones that affect the agents' movement. Attractor zones pull agents to the center, repulsor zones push agents away, damping zones slow agents down, and acceleration zones speed them up. Agents do not receive readings about these zones, and must learn policies despite their effects. Predators and protectors are unaffected by these zones.
