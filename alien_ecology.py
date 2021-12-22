@@ -279,8 +279,8 @@ class Agent:
         self.fitness = 0
         self.age = 0
         self.temperature = 20
-        self.inertial_damping = 0.80
-        self.speed = 0.4
+        self.inertial_damping = 0.75
+        self.speed = 0.35
         self.previous_states = deque()
         self.previous_actions = []
         self.previous_positions = deque()
@@ -345,6 +345,22 @@ class Pheromone:
         self.strength = 100
         self.entity = None
 
+class Zone:
+    def __init__(self, x, y, z, ztype, radius, strength):
+        self.xpos = x
+        self.ypos = y
+        self.zpos = z
+        self.ztype = ztype
+        self.radius = radius
+        self.strength = strength
+        self.entity = None
+        self.radius_entity = None
+        self.zone_colors = {'attractor': [51, 0, 102],
+                            'repulsor': [0, 51, 102],
+                            'damping': [102, 0, 51],
+                            'acceleration': [102, 0, 0]}
+
+
 # No evolution:
 # learners=1.00
 # min_reproduction_age=200
@@ -365,22 +381,23 @@ class game_space:
                  hidden_size=[16],
                  num_prev_states=1,
                  num_recent_actions=1000,
-                 learners=0.25,
+                 learners=0.50,
                  evaluate_learner_every=30,
                  mutation_rate=0.0001,
-                 integer_weights=False,
+                 integer_weights=True,
                  weight_range=1,
-                 area_size=70,
+                 area_size=100,
                  year_period=10*50,
                  day_period=10,
                  weather_harshness=0,
-                 num_agents=40,
+                 num_agents=20,
                  agent_start_energy=200,
                  agent_energy_drain=1,
                  agent_max_inventory=10,
-                 num_protectors=3,
+                 agent_view_distance=5,
+                 num_protectors=4,
                  protector_safe_distance=7,
-                 num_predators=5,
+                 num_predators=8,
                  predator_view_distance=5,
                  predator_kill_distance=2,
                  food_sources=1,
@@ -468,7 +485,7 @@ class game_space:
         self.min_reproduction_age = min_reproduction_age
         self.min_reproduction_energy = min_reproduction_energy
         self.reproduction_cost = reproduction_cost
-        self.agent_view_distance = 10
+        self.agent_view_distance = agent_view_distance
         self.visible_area = math.pi*(self.agent_view_distance**2)
         self.mutation_rate = mutation_rate
         self.agent_types = ["evolving",
@@ -481,15 +498,15 @@ class game_space:
         self.actions = [#"pick_food",
                         #"eat_food",
                         #"drop_food",
-                        "rotate_right",
-                        "rotate_left",
-                        "flip",
-                        "propel",
-                        #"null",
-                        #"propel_up",
-                        #"propel_right",
-                        #"propel_down",
-                        #"propel_left",
+                        #"rotate_right",
+                        #"rotate_left",
+                        #"flip",
+                        #"propel",
+                        "null",
+                        "propel_up",
+                        "propel_right",
+                        "propel_down",
+                        "propel_left",
                         #"mate",
                         #"freq_up",
                         #"freq_down",
@@ -518,18 +535,18 @@ class game_space:
                              "protectors_down",
                              "protectors_left",
                              "protector_in_range",
-                             "visible_protectors",
+                             #"visible_protectors",
                              "predators_up",
                              "predators_right",
                              "predators_down",
                              "predators_left",
-                             "visible_predators",
+                             #"visible_predators",
                              #"previous_action",
-                             #"own_energy",
+                             "own_energy",
                              #"own_temperature",
                              #"own_xposition",
                              #"own_yposition",
-                             "own_orientation",
+                             #"own_orientation",
                              #"own_xvelocity",
                              #"own_yvelocity",
                              #"food_inventory",
@@ -562,6 +579,12 @@ class game_space:
         self.genome_size += self.hidden_size[-1]
         #self.genome_size += 1
         self.genome_store = []
+        self.zone_types = ['attractor', 'repulsor', 'damping', 'acceleration']
+        self.zone_config = [['attractor',25, 25, 15, 0.2],
+                            ['attractor', 75, 75, 15, 0.2],
+                            ['repulsor', 25, 75, 15, 0.2],
+                            ['repulsor',75, 25, 15, 0.2]]
+        self.spawn_zones()
         self.previous_agents = deque()
         self.create_starting_food()
         self.create_predators()
@@ -582,6 +605,7 @@ class game_space:
         self.run_protector_actions()
         self.apply_predator_physics()
         self.run_predator_actions()
+        self.apply_zone_effects()
         self.set_agent_states()
         self.apply_agent_physics()
         self.run_agent_actions()
@@ -712,22 +736,131 @@ class game_space:
                                                            position = (x, y, zabs),
                                                            texture=texture)
 
+    def apply_zone_effects(self):
+        for index in range(len(self.zones)):
+            xpos = self.zones[index].xpos
+            ypos = self.zones[index].ypos
+            radius = self.zones[index].radius
+            strength = self.zones[index].strength
+            ztype = self.zones[index].ztype
+            affected = self.get_agents_in_radius(xpos, ypos, radius)
+            if len(affected) > 0:
+                for ai in affected:
+                    ax = self.agents[ai].xpos
+                    ay = self.agents[ai].ypos
+                    angle = math.atan2(ay-ypos, ax-xpos)
+                    xc = math.cos(angle)
+                    yc = math.sin(angle)
+                    axv = self.agents[index].xvel
+                    ayv = self.agents[index].yvel
+                    naxv = axv
+                    nayv = ayv
+                    if ztype == "damping":
+                        naxv = axv * (1 - strength)
+                        nayv = axv * (1 - strength)
+                    elif ztype == "acceleration":
+                        naxv = axv * (1/(1 - strength))
+                        nayv = ayv * (1/(1 - strength))
+                    elif ztype == "repulsor":
+                        naxv = axv + (xc * strength)
+                        nayv = ayv + (yc * strength)
+                    elif ztype == "attractor":
+                        naxv = axv - (xc * strength)
+                        nayv = ayv - (yc * strength)
+                    self.agents[ai].xvel = naxv
+                    self.agents[ai].yvel = nayv
+
+    def set_zone_entity(self, index):
+        xabs = self.zones[index].xpos
+        yabs = self.zones[index].ypos
+        zabs = self.zones[index].zpos
+        ztype = self.zones[index].ztype
+        s = self.zones[index].radius * 2
+        c = self.zones[index].zone_colors[ztype]
+        alpha = 30
+        c.append(alpha)
+        self.zones[index].entity = Entity(model='sphere',
+                                          color=color.rgba(*c),
+                                          scale=(s,s,s),
+                                          position = (xabs, yabs, zabs))
+        self.zones[index].radius_entity = Entity(model='sphere',
+                                                 color=color.rgba(*c),
+                                                 scale=(s,s,s),
+                                                 position = (xabs, yabs, zabs))
+
     def spawn_learning_agent(self, genome):
         self.spawn_new_agent(genome, True)
 
     def spawn_evolving_agent(self, genome):
         self.spawn_new_agent(genome, False)
 
+    def spawn_zones(self):
+        self.zones = []
+        for vals in self.zone_config:
+            ztype, xpos, ypos, radius, strength = vals
+            self.spawn_zone(xpos, ypos, ztype, radius, strength)
+
+    def spawn_zone(self, xpos, ypos, ztype, radius, strength):
+        zpos = -1
+        zone = Zone(xpos, ypos, zpos, ztype, radius, strength)
+        self.zones.append(zone)
+        index = len(self.zones)-1
+        if self.visuals == True:
+            self.set_zone_entity(index)
+
+    def get_zones_in_radius(self, xpos, ypos, radius):
+        ret = []
+        for i in range(len(self.zones)):
+            ax = self.zones[i].xpos
+            ay = self.zones[i].ypos
+            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
+                if self.distance(xpos, ypos, ax, ay) <= radius:
+                    ret.append(i)
+        return ret
+
+    def get_zone_spawn_location(self):
+        xpos = 0
+        ypos = 0
+        bestx = xpos
+        besty = ypos
+        for _ in range(20):
+            xpos = (self.area_size*0.2) + random.random()*(self.area_size*0.4)
+            ypos = (self.area_size*0.2) + random.random()*(self.area_size*0.4)
+            zones = self.get_zones_in_radius(xpos, ypos, 30)
+            lowest = None
+            if len(zones) < 1:
+                return xpos, ypos
+            if lowest == None:
+                lowest = zones
+                bestx = xpos
+                besty = ypos
+            elif zones < lowest:
+                lowest = zones
+                bestx = xpos
+                besty = ypos
+        return bestx, besty
+
     def get_safe_spawn_location(self):
         xpos = 0
         ypos = 0
+        bestx = xpos
+        besty = ypos
         for _ in range(20):
             xpos = random.random()*self.area_size
             ypos = random.random()*self.area_size
             predators = self.get_predators_in_radius(xpos, ypos, self.agent_view_distance)
+            lowest = None
             if len(predators) < 1:
                 return xpos, ypos
-        return xpos, ypos
+            if lowest == None:
+                lowest = predators
+                bestx = xpos
+                besty = ypos
+            elif predators < lowest:
+                lowest = predators
+                bestx = xpos
+                besty = ypos
+        return bestx, besty
 
     def spawn_new_agent(self, genome, learner):
         xpos, ypos = self.get_safe_spawn_location()
@@ -847,8 +980,8 @@ class game_space:
         elif orient == 7:
             yvel += 0.5*speed
             xvel -= 0.5*speed
-        xvel = min(xvel, (speed*10))
-        yvel = min(yvel, (speed*10))
+        xvel = min(xvel, (speed*5))
+        yvel = min(yvel, (speed*5))
         return xvel, yvel
 
     def viewpoint(self, xpos, ypos, orient, distance):
@@ -2523,19 +2656,24 @@ def update():
             orient = gs.predators[index].orient
             gs.predators[index].entity.rotation = (45*orient, 90, 0)
 
-    # Update predator positions
+    # Update protector positions
     for index, protector in enumerate(gs.protectors):
         if gs.protectors[index].entity is not None:
             xabs = gs.protectors[index].xpos
             yabs = gs.protectors[index].ypos
             zabs = gs.protectors[index].zpos
             gs.protectors[index].entity.position = (xabs, yabs, zabs)
-            pes = np.sin(gs.steps/10)*(gs.protector_safe_distance*2)
+            pes = abs(np.sin(gs.steps/10))*(gs.protector_safe_distance*2)
             gs.protectors[index].protection_entity.position = (xabs, yabs, zabs)
             gs.protectors[index].pulse_entity.position = (xabs, yabs, zabs)
             gs.protectors[index].pulse_entity.scale = (pes, pes, pes)
             orient = gs.protectors[index].orient
             gs.protectors[index].entity.rotation = (45*orient, 90, 0)
+
+    for index, zone in enumerate(gs.zones):
+        radius = gs.zones[index].radius
+        pes = abs(np.sin(gs.steps/10))*(radius*2)
+        gs.zones[index].radius_entity.scale = (pes, pes, pes)
 
 
 # Train the game
@@ -2579,6 +2717,10 @@ else:
 # Normalize inputs
 # Start with a smaller number of inputs
 # Reward on high entropy action prob dist
+# Entropy calculated on successful actions
+# Scale entropy for fitness
+# Devise intrinsic reward/fitness scheme
+# Split tasks?
 #
 # Idea:
 # protector that moves randomly
