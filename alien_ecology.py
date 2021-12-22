@@ -208,6 +208,7 @@ class Agent:
         self.genome = genome
         self.weights = self.make_weights()
         self.model = GN_model(self.weights, self.learnable)
+        self.model.reset()
         self.new_state = None
         self.state = None
         self.entity = None
@@ -330,7 +331,7 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[20],
+                 hidden_size=[8],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  learners=0.50,
@@ -344,14 +345,13 @@ class game_space:
                  agent_energy_drain=1,
                  agent_max_inventory=10,
                  agent_view_distance=5,
-                 num_protectors=2,
+                 num_protectors=0,
                  protector_safe_distance=5,
-                 num_predators=4,
-                 predator_view_distance=5,
+                 num_predators=0,
+                 predator_view_distance=6,
                  predator_kill_distance=2,
-                 use_food=True,
                  num_food=20,
-                 use_zones=True,
+                 use_zones=False,
                  visuals=False,
                  pulse_zones=False,
                  num_previous_agents=200,
@@ -401,7 +401,6 @@ class game_space:
         self.num_predators = num_predators
         self.predator_view_distance = predator_view_distance
         self.predator_kill_distance = predator_kill_distance
-        self.use_food = use_food
         self.num_food = num_food
         self.use_zones = use_zones
         self.agent_view_distance = agent_view_distance
@@ -436,16 +435,16 @@ class game_space:
                              "food_down",
                              "food_left",
                              #"visible_food",
-                             "protectors_up",
-                             "protectors_right",
-                             "protectors_down",
-                             "protectors_left",
-                             "protector_in_range",
+                             #"protectors_up",
+                             #"protectors_right",
+                             #"protectors_down",
+                             #"protectors_left",
+                             #"protector_in_range",
                              #"visible_protectors",
-                             "predators_up",
-                             "predators_right",
-                             "predators_down",
-                             "predators_left",
+                             #"predators_up",
+                             #"predators_right",
+                             #"predators_down",
+                             #"predators_left",
                              #"visible_predators",
                              "own_energy",
                              ]
@@ -465,8 +464,10 @@ class game_space:
         lpos = self.area_size*0.2
         rpos = self.area_size*0.8
         mpos = self.area_size*0.5
-        big = self.area_size*0.15
         small = self.area_size*0.04
+        medium = self.area_size*0.1
+        big = self.area_size*0.15
+        bigger = self.area_size*0.2
         self.zone_config = [['attractor', lpos, lpos, big, 0.2],
                             ['attractor', rpos, rpos, big, 0.2],
                             ['repulsor', lpos, rpos, big, 0.2],
@@ -475,7 +476,7 @@ class game_space:
                             ['repulsor', mpos, rpos, small, 2.0],
                             ['repulsor', lpos, mpos, small, 2.0],
                             ['repulsor', rpos, mpos, small, 2.0],
-                            ['damping', mpos, mpos, big, 0.1]]
+                            ['acceleration', mpos, mpos, bigger, 0.3]]
         self.spawn_zones()
         self.spawn_food()
         self.previous_agents = deque()
@@ -934,13 +935,16 @@ class game_space:
             self.agents[index].age += 1
             xpos = self.agents[index].xpos
             ypos = self.agents[index].ypos
-            if self.use_food == True:
+            if self.num_food > 0:
                 nearby_food = self.get_food_in_radius(xpos, ypos, 1)
                 if len(nearby_food) > 0:
                     fi = random.choice(nearby_food)
                     self.respawn_food(fi)
                     self.agents[index].energy += 50
-                    # Record reward?
+                    self.agents[index].happiness += 10
+                    # Reward learning agents for eating food
+                    if len(self.agents[index].model.rewards) > 0:
+                        self.agents[index].model.rewards[-1] = np.float32(1.0)
             energy_drain = self.agent_energy_drain
             protectors = self.get_protectors_in_radius(xpos, ypos, self.protector_safe_distance)
             if len(protectors) > 0:
@@ -1490,12 +1494,12 @@ class game_space:
                     ayv = self.agents[index].yvel
                     naxv = axv
                     nayv = ayv
-                    if ztype == "damping":
-                        naxv = axv * (1 - strength)
-                        nayv = axv * (1 - strength)
-                    elif ztype == "acceleration":
+                    if ztype == "acceleration":
                         naxv = axv * (1/(1 - strength))
                         nayv = ayv * (1/(1 - strength))
+                    elif ztype == "damping":
+                        naxv = axv * (1 - strength)
+                        nayv = axv * (1 - strength)
                     elif ztype == "repulsor":
                         naxv = axv + (xc * strength)
                         nayv = ayv + (yc * strength)
@@ -1527,7 +1531,7 @@ class game_space:
 # Food routines
 #################
     def spawn_food(self):
-        if self.use_food == False:
+        if self.num_food < 1:
             return
         self.food = []
         for index in range(self.num_food):
