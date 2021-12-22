@@ -55,6 +55,8 @@ All other options will require editing the file itself, since I didn't bother pa
 - **agent_energy_drain** defines how many energy agents lose per step.
 - **num_predators** defines the number of predators in the simulation. If you want to have fun, increase the speed and inertial_damping values in class Predator.
 - **num_protectors** defines the number of protectors in the simulation.
+- **num_food** defines the number of food present in the simulation. Setting this to zero removes food completely, so remember to adjust agent observations accordingly.
+- **use_zones** defines whether zones will be used during the simulation. Zones can be defined in the **self.zone_config** variable in game_space. See the code for an example of how to do this.
 - **fitness_index** if set to 1 will evaluate new genomes based on fitness, and if set to 2 will base on age
 - **respawn_genome_store** - when evolving agents are respawned, how likely are their new genomes to come from genome_store instead of previous_agents
 - **rebirth_genome_store** - same as above but for learning agents
