@@ -47,13 +47,13 @@ For example, say the agent needs to learn tasks involving four inputs for detect
 
 Model input: 12 values -> split into 3 x 4 sets
 
-For each set of four, feed into a separate hidden layer of 8, and then into an output layer of 4, i.e. 3 blocks each containing 72 parameters
+For each set of four, feed into a separate hidden layer of 8, and then into an output layer of 4, i.e. 3 blocks each containing 64 parameters
 
 Concatenate the three sets of four outputs -> 12 output values from the three combined logic blocks
 
-Connect the concatenated 12 values into a softmax layer of 4 values, i.e. 48 parameters
+Connect the concatenated 12 values into a softmax layer of 4 values, i.e. 48 parameters (60 including A2C value head)
 
-Total parameters: 264
+Total parameters: 240 (252 with A2C)
 
 However, the way we'd approach this from an evolutionary standpoint would be to store the parameters as not one long genome, but four - one for each of the three task sub-blocks, and one for the final layer. When reproducing, we'd combine and mutate each block separately, thus preserving learned features for each task.
 
