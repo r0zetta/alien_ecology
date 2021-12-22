@@ -8,7 +8,7 @@ This repository contains code that implements an environment for simulated organ
 
 Organisms can perform rotation and propulsion movement actions. Organisms can "see" further in the direction they're facing, but can also "sense" things above, below, to the left, and to the right of their position. Organisms can propel in the direction they're facing, as well as in up, down, left and right directions.
 
-Organism logic is represented by simple feed-forward neural networks. Inputs are observations from the environment that include signals denoting that other organisms are close by or in view. Outputs of the neural network tie into organism actions.
+Organism logic is represented by simple feed-forward neural networks. Inputs are observations from the environment that include signals denoting that other organisms are close by or in view. Outputs of the neural network tie into organism actions. Agents can be graded on the number of steps they lived for, or a fitness value that includes bonuses for movement and performing actions.
 
 Organisms are trained either by evolution, reinforcement learning, or a hybrid of the two. The weights of the neural networks are used as each organism's genome. Genomes from organisms that perform the best are stored and used for reproduction, or to replace an ill-performing learning agent's weights after a specified evaluation period. When an evolving organism dies it is respawned at a new random location and given a genome evolved from previously collected genomes. If a learning agent dies, backpropagation is used to train its neural network (using A2C) and it is respawned at a new random location. Learning agents are periodically evaluated on the mean age or fitness during previous n runs. If a learning agent fails its evaluation, it is replaced with a new learning agent that receives neural network weights from a random previously recorded genome.
 
@@ -19,12 +19,16 @@ The purpose of this simulation is:
 - to discover methods that allow agents to quickly learn policies capable of solving complex tasks
 
 ## Experiment 1: evade predators
+This simulation contains only agents and predators. The agent's state includes readings of the number of predators above, below, to the left, and to the right of the agent, within the agent's maximum view distance. Agents learn to run away from predators, and this policy can be learned quickly using a hidden_size of 8, with a total number of parameters of 64. Evolutionary processes find optimal policies much quicker than reinforcement learning mechanisms.
 
 ## Experiment 2: collect food
+This simulation contains only agents and food. Agents receive a reading of number of food above, below, to the left, and to the right of the agent.
 
-## Experiment 2: evade predators and follow protectors
+## Experiment 3: evade predators and follow protectors
+This simulation contains both predators and protectors. Agents receive readings about nearby protectors and predators, their current energy, and a flag that indicates whether they are within the healing field of a protector.
 
-## Experiment 3: attractor, repulsor, and damping zones added
+## Experiment 4: attractor, repulsor, and damping zones added
+This experiment combines all of the previous, and contains predators, protectors, and food. The simulation environment also contains zones that affect the agents' movement. Attractor zones pull agents to the center, repulsor zones push agents away, damping zones slow agents down, and acceleration zones speed them up. Agents do not receive readings about these zones, and must learn policies despite their effects.
 
 
 ## Findings
