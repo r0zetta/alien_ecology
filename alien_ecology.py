@@ -339,7 +339,7 @@ class game_space:
                  integer_weights=True,
                  weight_range=1,
                  area_size=100,
-                 num_agents=20,
+                 num_agents=40,
                  agent_start_energy=200,
                  agent_energy_drain=1,
                  agent_max_inventory=10,
