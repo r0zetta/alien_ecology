@@ -46,7 +46,7 @@ You can view stats from the experiment by running the accompanying plot_stats.ip
 
 All other options will require editing the file itself, since I didn't bother parameterizing them. Look for class game_space and edit the inputs to the init function. Here are a few tips:
 
-- **hidden_size** defines the shape of the hidden layers in the neural network
+- **hidden_size** defines the shape of the hidden layers in the neural network. Note that if this list contains multiple values, multiple hidden layers will be created. A default value of something like [8] or [16] is probably good. You can, of course make much larger neural networks by defining hidden to be [64, 128, 64] or something like that, but bear in mind evolutionary strategies will fail if there are too many parameters to find.
 - **num_prev_states** allows you to set how many previous observation sets are present in the model's input
 - **learners** defines the split between learning agents and evolving agents. At 1.0, the simulation is all learners. At 0.0, the simulation is all evolvers.
 - **area_size** defines the width and height of the simulated area. It is always a square shape.
