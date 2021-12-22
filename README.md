@@ -22,7 +22,7 @@ The purpose of this simulation is:
 This simulation contains only agents and predators. The agent's state includes readings of the number of predators above, below, to the left, and to the right of the agent, within the agent's maximum view distance (state size 4). Agents learn to run away from predators, and this policy can be learned quickly using a hidden_size of 8, with a total number of parameters of 64. Evolutionary processes find optimal policies much quicker than reinforcement learning mechanisms.
 
 ## Experiment 2: collect food
-This simulation contains only agents and food. Agents receive a reading of number of food above, below, to the left, and to the right of the agent (state size 4).
+This simulation contains only agents and food. Agents receive a reading of number of food above, below, to the left, and to the right of the agent, and their own energy value (state size 5).
 
 ## Experiment 3: evade predators and follow protectors
 This simulation contains both predators and protectors. Agents receive readings about nearby protectors and predators, their current energy, and a flag that indicates whether they are within the healing field of a protector (state size 10).
