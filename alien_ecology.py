@@ -62,9 +62,9 @@ class Net(nn.Module):
             prob = m.log_prob(action)
             return action, value, prob
         else:
-            #m = Categorical(probs)
-            #action = m.sample()
-            action = np.argmax(probs.detach().numpy())
+            m = Categorical(probs)
+            action = m.sample()
+            #action = np.argmax(probs.detach().numpy())
             return action
 
 class GN_model:
@@ -323,7 +323,7 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[8],
+                 hidden_size=[16],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  learners=0.50,
@@ -334,11 +334,11 @@ class game_space:
                  area_size=70,
                  num_agents=20,
                  agent_start_energy=200,
-                 agent_energy_drain=0,
+                 agent_energy_drain=1,
                  agent_view_distance=5,
-                 num_protectors=0,
+                 num_protectors=3,
                  protector_safe_distance=5,
-                 num_predators=8,
+                 num_predators=6,
                  predator_view_distance=6,
                  predator_kill_distance=2,
                  num_food=0,
@@ -426,11 +426,11 @@ class game_space:
                              #"food_down",
                              #"food_left",
                              #"visible_food",
-                             #"protectors_up",
-                             #"protectors_right",
-                             #"protectors_down",
-                             #"protectors_left",
-                             #"protector_in_range",
+                             "protectors_up",
+                             "protectors_right",
+                             "protectors_down",
+                             "protectors_left",
+                             "protector_in_range",
                              #"visible_protectors",
                              "predators_up",
                              "predators_right",
@@ -909,6 +909,7 @@ class game_space:
             genome = self.make_new_genome(0)
             self.agents[index].set_genome(g)
             self.set_initial_agent_state(index)
+            self.spawns += 1
 
     def update_agent_status(self):
         dead = set()
