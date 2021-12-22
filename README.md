@@ -1,16 +1,10 @@
 ## Forewarning
-What follows is old news, some of which I've now figured out. For instance, putting agents in an environment where their only goal is to live longer by finding and eating food is, apparently, a really hard policy to learn (from both genetic algorithm and reinforcement learning perspectives). This is something that is quite contrary to all life on this planet. However, certain other policies, such as learning to evade predators, are really easy to learn. My focus now will be on identfying tasks that are seemingly simple to living beings, but overly complex to agents, and figuring out why training takes so long and what might be done to speed up that training.
-
-Learning a policy quickly means reducing the inputs, hidden, and outputs to the smallest number of parameters. For instance, the evade policy was evolved in 15 minutes using an agent with 4 input, 8 hidden, and 4 output. Simple tasks can be accomplished in this way, but multi-step tasks are much more difficult to learn with sparse rewards. For instance, move to and eat food could not be learned quickly, whereas move to and stay near protector could be. Perhaps breaking down tasks into small, easily learnable blocks is the way to create fast learning policies?
-
-For now, I hope to leave the code in a state that allows anyone who downloads the repository to run and enjoy watching organisms evolve. When I figure out how to make them learn more complex tasks quickly, I'll update this repository.
-
-More to come...
+This report is outdated, and will we re-written soon. 
 
 What follows is an account of attempting to get agents to learn multiple tasks, including hard tasks (such as find and eat food). The agents never learned to interact properly with the environment because they were bottlenecked by these hard tasks. But they shouldn't be hard to begin with. I'll re-introduce them once I figure out how to make these hard tasks straightforward for agents to learn.
 
 ## Introduction
-This repository contains code that implements an environment for simulated organisms to learn and evolve behaviours. The environment itself is a two-dimensional toroidal plane - organisms that travel over an edge appear at the opposite edge of the plane in a similar fashion to how pacman moves. The environment presents a number of problems the organisms must learn to solve:
+This repository contains code that implements an environment for simulated organisms to learn and evolve behaviours. The environment itself is a two-dimensional toroidal plane - organisms that travel over an edge appear at the opposite edge of the plane in a similar fashion to how pacman moves. The environment presents a number of problems the organisms must learn to solve.
 
 1. Organisms have energy that depletes. Consuming food replenishes that energy as long as the organism isn't already at full energy. Organisms must pick food and then eat it. They can store a finite number of food, and thus the action of picking food only works if they aren't already carrying the maximum amount. Organisms can also drop food. Dropped food can be picked up by other organisms. After a fixed time, dropped food will either expire and disappear, or cause a new plant to sprout.
 2. Predators exist in the environment that can eat organisms. Predators move using very simple hard-coded logic (if they can see organisms ahead, move forward, otherwise move in a random fashion). Organisms must thus learn to evade predators.
@@ -86,6 +80,12 @@ The experiment executed 1,587,524 steps (over several days) and 95,038 episodes.
 This policy is the most interesting yet, but the agents still fail to behave as expected. Further experimentation with NaRLA might be interesting. I used the policy gradient approach implemented by the original author for the above experiment, but would like to modify the mechanism to use A2C instead. Also, different neural arrangements might be worth trying.
 
 Ultimately, these experiments prove that current techniques for training agents are way too slow. I originally created this experiment in order to observe emergent behaviour between organisms in a simulation. My plan was to add additional complexity to the simulation in the form of items and entities to interact with. However, what happened instead was a failed search for a method to train these simple agents in the first place.
+
+For instance, putting agents in an environment where their only goal is to live longer by finding and eating food is, apparently, a really hard policy to learn (from both genetic algorithm and reinforcement learning perspectives). This is something that is quite contrary to all life on this planet. However, certain other policies, such as learning to evade predators, are really easy to learn. My focus now will be on identfying tasks that are seemingly simple to living beings, but overly complex to agents, and figuring out why training takes so long and what might be done to speed up that training.
+
+Learning a policy quickly means reducing the inputs, hidden, and outputs to the smallest number of parameters. For instance, the evade policy was evolved in 15 minutes using an agent with 4 input, 8 hidden, and 4 output. Simple tasks can be accomplished in this way, but multi-step tasks are much more difficult to learn with sparse rewards. For instance, move to and eat food could not be learned quickly, whereas move to and stay near protector could be. Perhaps breaking down tasks into small, easily learnable blocks is the way to create fast learning policies?
+
+For now, I hope to leave the code in a state that allows anyone who downloads the repository to run and enjoy watching organisms evolve. When I figure out how to make them learn more complex tasks quickly, I'll update this repository.
 
 
 # Technical details
