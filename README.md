@@ -40,7 +40,18 @@ When presented with a small state space and limited action space, agents quickly
 
 It would be interesting to discover whether the policy learned for collecting food would work out-of-the-box in the scenario that requires agents to locate the follow a protector.
 
-Multi-step tasks were much more difficult to learn due the the number of inputs and the sparse rewards. Perhaps breaking down tasks into small, easily learnable blocks is the way to create fast learning policies? Instead of training an agent on the complex task, might there be a way of training multiple models on sub-tasks and then combining them to solve the more complex task?
+Multi-step tasks were much more difficult to learn due the the number of inputs and the sparse rewards. Perhaps breaking down tasks into small, easily learnable blocks is the way to create fast learning policies? Instead of training an agent on the complex task, might there be a way of training multiple models on sub-tasks and then combining them to solve the more complex task? Perhaps the answer is not to attach all inputs to one hidden layer, but to attach sets of inputs related to a specific task to their own hidden layer and output layer of size number of actions, concatenate all sub-output layers, and then attach them to a final output layer containing the number of actions
+
+For example, say the agent needs to learn tasks involving four inputs for detecting predators, four for protectors and four for food, the layers would look like this:
+
+Model input: 12 values -> split into 3 x 4 sets
+For each set of four, feed into a separate hidden layer of 8, and then into an output layer of 4, i.e. 3 blocks each containing 72 parameters
+Concatenate the three sets of four outputs -> 12 output values from the three combined logic blocks
+Connect the concatenated 12 values into a softmax layer of 4 values, i.e. 48 parameters
+Total parameters: 264
+
+However, the way we'd approach this from an evolutionary standpoint would be to store the parameters as not one long genome, but four - one for each of the three task sub-blocks, and one for the final layer. When reproducing, we'd combine and mutate each block separately, thus preserving learned features for each task.
+
 
 For now, I hope to leave the code in a state that allows anyone who downloads the repository to run and enjoy watching organisms evolve. I'll update this repository with new findings and discoveries as I make them.
 
