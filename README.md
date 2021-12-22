@@ -19,16 +19,16 @@ The purpose of this simulation is:
 - to discover methods that allow agents to quickly learn policies capable of solving complex tasks
 
 ## Experiment 1: evade predators
-This simulation contains only agents and predators. The agent's state includes readings of the number of predators above, below, to the left, and to the right of the agent, within the agent's maximum view distance. Agents learn to run away from predators, and this policy can be learned quickly using a hidden_size of 8, with a total number of parameters of 64. Evolutionary processes find optimal policies much quicker than reinforcement learning mechanisms.
+This simulation contains only agents and predators. The agent's state includes readings of the number of predators above, below, to the left, and to the right of the agent, within the agent's maximum view distance (state size 4). Agents learn to run away from predators, and this policy can be learned quickly using a hidden_size of 8, with a total number of parameters of 64. Evolutionary processes find optimal policies much quicker than reinforcement learning mechanisms.
 
 ## Experiment 2: collect food
-This simulation contains only agents and food. Agents receive a reading of number of food above, below, to the left, and to the right of the agent.
+This simulation contains only agents and food. Agents receive a reading of number of food above, below, to the left, and to the right of the agent (state size 4).
 
 ## Experiment 3: evade predators and follow protectors
-This simulation contains both predators and protectors. Agents receive readings about nearby protectors and predators, their current energy, and a flag that indicates whether they are within the healing field of a protector.
+This simulation contains both predators and protectors. Agents receive readings about nearby protectors and predators, their current energy, and a flag that indicates whether they are within the healing field of a protector (state size 10).
 
 ## Experiment 4: attractor, repulsor, and damping zones added
-This experiment combines all of the previous, and contains predators, protectors, and food. The simulation environment also contains zones that affect the agents' movement. Attractor zones pull agents to the center, repulsor zones push agents away, damping zones slow agents down, and acceleration zones speed them up. Agents do not receive readings about these zones, and must learn policies despite their effects.
+This experiment combines all of the previous, and contains predators, protectors, and food (state size 14). The simulation environment also contains zones that affect the agents' movement. Attractor zones pull agents to the center, repulsor zones push agents away, damping zones slow agents down, and acceleration zones speed them up. Agents do not receive readings about these zones, and must learn policies despite their effects.
 
 
 ## Findings
