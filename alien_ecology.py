@@ -360,7 +360,6 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 net_desc = [[4, 8], [5, 10], [4, 8]],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  learners=0.50,
@@ -458,26 +457,31 @@ class game_space:
                              #"agents_down",
                              #"agents_left",
                              #"visible_agents",
-                             "food_up",
+                             ["food_up",
                              "food_right",
                              "food_down",
-                             "food_left",
+                             "food_left"],
                              #"visible_food",
-                             "protectors_up",
+                             ["protectors_up",
                              "protectors_right",
                              "protectors_down",
                              "protectors_left",
-                             "protector_in_range",
+                             "protector_in_range"],
                              #"visible_protectors",
-                             "predators_up",
+                             ["predators_up",
                              "predators_right",
                              "predators_down",
-                             "predators_left",
+                             "predators_left"],
                              #"visible_predators",
                              #"own_energy",
                              ]
-        self.observation_size = len(self.observations)
-        self.net_desc = net_desc
+        self.observation_size = sum([len(x) for x in self.observations])
+        self.net_desc = []
+        for index, item in enumerate(self.observations):
+            obs = len(self.observations[index])
+            hidden = obs*2
+            entry = [obs, hidden]
+            self.net_desc.append(entry)
         self.action_size = len(self.actions)
         self.genome_size = []
         self.make_genome_size()
@@ -1141,8 +1145,9 @@ class game_space:
 
     def get_agent_observations(self, index):
         function_names = []
-        for n in self.observations:
-            function_names.append("get_" + n)
+        for block in self.observations:
+            for n in block:
+                function_names.append("get_" + n)
         observations = []
         for fn in function_names:
             class_method = getattr(self, fn)
