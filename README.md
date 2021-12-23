@@ -55,13 +55,7 @@ Connect the concatenated 12 values into a softmax layer of 4 values, i.e. 48 par
 
 Total parameters: 240 (252 with A2C)
 
-However, the way we'd approach this from an evolutionary standpoint would be to store the parameters as not one long genome, but four - one for each of the three task sub-blocks, and one for the final layer. When reproducing, we'd combine and mutate each block separately, thus preserving learned features for each task. Since each genome is very small, make sure to apply a muatation rate as follows:
-
-`
-    mutation_chance = (1/mutation_rate) * len(genome)
-    if randon.random() < mutation_chance:
-        mutate_one_index()
-`
+However, the way we'd approach this from an evolutionary standpoint would be to store the parameters as not one long genome, but as one for each of the three task sub-blocks, and one for the final layer. When reproducing, we'd combine and mutate each block separately, thus preserving learned features for each task. Each sub-block genome would thus be quite small and therefore the chance of evolving a policy would be much higher than attempting to evolve a policy on a genome that is hundreds of items in length.
 
 For now, I hope to leave the code in a state that allows anyone who downloads the repository to run and enjoy watching organisms evolve. I'll update this repository with new findings and discoveries as I make them.
 
@@ -77,8 +71,6 @@ You can view stats from the experiment by running the accompanying plot_stats.ip
 
 All other options will require editing the file itself, since I didn't bother parameterizing them. Look for class game_space and edit the inputs to the init function. Here are a few tips:
 
-- **hidden_size** defines the shape of the hidden layers in the neural network. Note that if this list contains multiple values, multiple hidden layers will be created. A default value of something like [8] or [16] is probably good. You can, of course make much larger neural networks by defining hidden to be [64, 128, 64] or something like that, but bear in mind evolutionary strategies will fail if there are too many parameters to find.
-- **num_prev_states** allows you to set how many previous observation sets are present in the model's input
 - **learners** defines the split between learning agents and evolving agents. At 1.0, the simulation is all learners. At 0.0, the simulation is all evolvers.
 - **area_size** defines the width and height of the simulated area. It is always a square shape.
 - **num_agents** defines the number of agents to run in the simulation. This number will be split between learners and evolvers.
