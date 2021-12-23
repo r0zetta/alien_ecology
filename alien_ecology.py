@@ -9,50 +9,111 @@ import torch.nn.functional as F
 from torch.distributions import Categorical
 
 class Net(nn.Module):
-    def __init__(self, w, l):
+    def __init__(self, weights, l):
         super(Net, self).__init__()
-        self.w = w
+        self.weights = weights
         self.l = l
-        self.fc_layers = nn.ModuleList()
-        for item in self.w:
-            s1, s2, d = item
-            fc = nn.Linear(s1, s2, bias=False)
-            fc.weight.data = d
-            self.fc_layers.append(fc)
+        self.block = []
+        for item in weights:
+            if len(item) > 1:
+                self.block.append([item[0][0], item[0][1], item[1][1]])
+        self.num_actions = self.weights[-2][0][1]
+        self.num_blocks = len(self.block)
+        self.inps = [x[0] for x in self.block]
+        self.out_cat = sum([x[-1] for x in self.block])
+        self.blocks = {}
+        for index in range(self.num_blocks):
+            weights1 = self.weights[index][0][2]
+            weights2 = self.weights[index][1][2]
+            self.blocks[index] = nn.ModuleList()
+            fc = nn.Linear(self.block[index][0], self.block[index][1])
+            fc.weight.data = weights1
+            self.blocks[index].append(fc)
+            fc = nn.Linear(self.block[index][1], self.block[index][2])
+            fc.weight.data = weights2
+            self.blocks[index].append(fc)
+        self.action = nn.Linear(self.out_cat, self.num_actions)
+        self.action.weight.data = self.weights[-2][0][2]
+        self.value = nn.Linear(self.out_cat, 1)
+        self.value.weight.data = self.weights[-1][0][2]
 
     def forward(self, x):
-        for i in range(len(self.fc_layers)-2):
-            x = F.relu(self.fc_layers[i](x))
-        a = F.softmax(F.relu(self.fc_layers[-2](x)), dim=-1)
-        v = F.relu(self.fc_layers[-1](x))
+        block_out = torch.empty((self.num_blocks, self.num_actions))
+        current_index = 0
+        for index in range(len(self.blocks)):
+            i = x[0, current_index:current_index+self.inps[index]]
+            a = F.relu(self.blocks[index][0](i))
+            a = F.relu(self.blocks[index][1](a))
+            block_out[index] = a
+            current_index = current_index+self.inps[index]
+        rc = torch.ravel(torch.tensor(block_out))
+        a = F.softmax(F.relu(self.action(rc)), dim=-1)
+        v = F.relu(self.value(rc))
         return a, v
 
+    def get_param_count(self, item):
+        count = 1
+        for c in item.shape:
+            count = count * c
+        return count
+
     def print_w(self):
-        for item in self.w:
-            s1, s2, d = item
-            print(s1, s2, np.shape(d))
+        total_params = 0
+        genome = []
+        for index in range(self.num_blocks):
+            entry = []
+            print("Block: " + str(index))
+            d1 = self.blocks[index][0].weight.data.detach().numpy()
+            print("fc0 weights: ", d1.shape)
+            total_params += self.get_param_count(d1)
+            b1 = self.blocks[index][0].bias.data.detach().numpy()
+            print("fc0 biases: ", b1.shape)
+            d2 = self.blocks[index][1].weight.detach().numpy()
+            print("fc1 weights: ", d2.shape)
+            total_params += self.get_param_count(d2)
+            b2 = self.blocks[index][1].bias.data.detach().numpy()
+            print("fc1 biases: ", b2.shape)
+        da = self.action.weight.data.detach().numpy()
+        total_params += self.get_param_count(da)
+        print("action weights: ", da.shape)
+        ba = self.action.bias.data.detach().numpy()
+        print("action biases: ", ba.shape)
+        dv = self.value.weight.data.detach().numpy()
+        total_params += self.get_param_count(dv)
+        print("value weights: ", dv.shape)
+        bv = self.value.bias.data.detach().numpy()
+        print("value biases: ", bv.shape)
+        print("total params: ", total_params)
+        genome_shape = [len(x) for x in genome]
+        print(genome_shape)
         print()
-        for i, l in enumerate(self.fc_layers):
-            d = l.weight.data.detach().numpy()
-            print("fc"+str(i)+" weights: ", d.shape)
-            b = l.bias.data.detach().numpy()
-            print("fc"+str(i)+" biases: ", b.shape)
-        print()
-        sys.exit(0)
 
     def get_w(self):
-        w = []
-        for fc in self.fc_layers:
-            d = fc.weight.data.detach().numpy()
-            d = list(np.ravel(d))
-            w.extend(d)
-        return w
+        genome = []
+        for index in range(self.num_blocks):
+            entry = []
+            d1 = self.blocks[index][0].weight.data.detach().numpy()
+            d1 = np.ravel(d1)
+            entry.extend(list(d1))
+            d2 = self.blocks[index][1].weight.detach().numpy()
+            d2 = np.ravel(d2)
+            entry.extend(list(d2))
+            entry = np.ravel(entry)
+            genome.append(list(entry))
+        da = self.action.weight.data.detach().numpy()
+        genome.append(list(np.ravel(da)))
+        dv = self.value.weight.data.detach().numpy()
+        genome.append(list(np.ravel(dv)))
+        return genome
 
     def set_w(self, w):
-        self.w = w
-        for i, item in enumerate(self.w):
-            s1, s2, d = item
-            self.fc_layers[i].weight.data = d
+        for index in range(self.num_blocks):
+            weights1 = self.weights[index][0][2]
+            weights2 = self.weights[index][1][2]
+            self.blocks[index][0].weight.data = weights1
+            self.blocks[index][1].weight.data = weights2
+        self.action.weight.data = self.weights[-2][0][2]
+        self.value.weight.data = self.weights[-1][0][2]
 
     def get_action(self, state):
         probs, value = self.forward(state)
@@ -80,8 +141,7 @@ class GN_model:
         print(sum([param.nelement() for param in self.policy.parameters()]))
 
     def print_w(self):
-        for item in self.w:
-            print(item[0], item[1], np.array(item[2]).shape)
+        return self.policy.print_w()
 
     def get_w(self):
         return self.policy.get_w()
@@ -167,29 +227,12 @@ class GN_model:
         self.optimizer.step()
         self.reset()
 
-    def save_model(self, dirname, index):
-        filename = os.path.join(dirname, "policy_model_" + "%02d"%index + ".pt")
-        torch.save({ "policy_state_dict": self.policy.state_dict(),
-                     "policy_hidden": self.policy_hidden,
-                   }, filename)
-
-    def load_model(self, dirname, index):
-        filename = os.path.join(dirname, "policy_model_" + "%02d"%index + ".pt")
-        if os.path.exists(filename):
-            checkpoint = torch.load(filename)
-            self.policy.load_state_dict(checkpoint['policy_state_dict'])
-            self.policy_hidden = checkpoint["policy_hidden"]
-            return True
-        return False
-
 class Agent:
     def __init__(self, x, y, z, learnable, color, energy,
-                 state_size, action_size, hidden_size, genome):
+                 action_size, genome, net_desc):
         self.colors = ["pink", "blue", "green", "orange", "purple", "red", "teal", "violet", "yellow"]
         self.start_energy = energy
-        self.state_size = state_size
         self.action_size = action_size
-        self.hidden_size = hidden_size
         self.learnable = learnable
         self.sample = False
         self.xpos = x
@@ -198,6 +241,7 @@ class Agent:
         self.color = color
         self.color_str = self.colors[color]
         self.genome = genome
+        self.net_desc = net_desc
         self.weights = self.make_weights()
         self.model = GN_model(self.weights, self.learnable)
         self.model.reset()
@@ -214,27 +258,20 @@ class Agent:
 
     def make_weights(self):
         weights = []
-        m1 = 0
-        m2 = self.state_size * self.hidden_size[0]
-        w = torch.Tensor(np.reshape(self.genome[m1:m2], (self.hidden_size[0], self.state_size)))
-        weights.append([self.state_size, self.hidden_size[0], w])
-        if len(self.hidden_size) > 1:
-            for i in range(len(self.hidden_size)):
-                if i+1 < len(self.hidden_size):
-                    m1 = m2
-                    m2 = m1 + (self.hidden_size[i] * self.hidden_size[i+1])
-                    w = torch.Tensor(np.reshape(self.genome[m1:m2],
-                                     (self.hidden_size[i+1], self.hidden_size[i])))
-                    weights.append([self.hidden_size[i], self.hidden_size[i+1], w])
-        m1 = m2
-        m2 = m1 + self.action_size*self.hidden_size[-1]
-        w = torch.Tensor(np.reshape(self.genome[m1:m2], (self.action_size, self.hidden_size[-1])))
-        weights.append([self.hidden_size[-1], self.action_size, w])
-        m1 = m2
-        m2 = m1 + self.hidden_size[-1]
-        w = torch.Tensor(np.reshape(self.genome[m1:m2], (1, self.hidden_size[-1])))
-        weights.append([self.hidden_size[-1], 1, w])
-
+        for index, item in enumerate(self.genome):
+            entry = []
+            layer_desc = self.net_desc[index]
+            if len(layer_desc) > 2:
+                s1, s2, o = layer_desc
+                w = torch.Tensor(np.reshape(item[0:s1*s2], (s2, s1)))
+                entry.append([s1, s2, w])
+                w = torch.Tensor(np.reshape(item[s1*s2:], (o, s2)))
+                entry.append([s2, o, w])
+            else:
+                s1, o = layer_desc
+                w = torch.Tensor(np.reshape(item, (o, s1)))
+                entry.append([s1, o, w])
+            weights.append(entry)
         return weights
 
     def set_genome(self, genome):
@@ -323,7 +360,7 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 hidden_size=[16],
+                 net_desc = [[4, 8], [5, 10], [4, 8]],
                  num_prev_states=1,
                  num_recent_actions=1000,
                  learners=0.50,
@@ -341,17 +378,17 @@ class game_space:
                  num_predators=6,
                  predator_view_distance=6,
                  predator_kill_distance=2,
-                 num_food=0,
+                 num_food=20,
                  use_zones=False,
                  visuals=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=100,
+                 genome_store_size=300,
                  fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=0.9,
                  rebirth_genome_store=0.9,
                  top_n=0.2,
-                 save_every=2000,
+                 save_every=100,
                  record_every=50,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
@@ -421,10 +458,10 @@ class game_space:
                              #"agents_down",
                              #"agents_left",
                              #"visible_agents",
-                             #"food_up",
-                             #"food_right",
-                             #"food_down",
-                             #"food_left",
+                             "food_up",
+                             "food_right",
+                             "food_down",
+                             "food_left",
                              #"visible_food",
                              "protectors_up",
                              "protectors_right",
@@ -439,17 +476,11 @@ class game_space:
                              #"visible_predators",
                              #"own_energy",
                              ]
-        self.hidden_size = hidden_size
+        self.observation_size = len(self.observations)
+        self.net_desc = net_desc
         self.action_size = len(self.actions)
-        self.state_size = len(self.observations)*self.num_prev_states
-        self.genome_size = 0
-        self.genome_size += self.state_size*self.hidden_size[0]
-        if len(self.hidden_size) > 1:
-            for i in range(len(self.hidden_size)):
-                if i+1 < len(self.hidden_size):
-                    self.genome_size += self.hidden_size[i]*self.hidden_size[i+1]
-        self.genome_size += self.action_size*self.hidden_size[-1]
-        self.genome_size += self.hidden_size[-1]
+        self.genome_size = []
+        self.make_genome_size()
         self.genome_store = []
         self.zone_types = ['attractor', 'repulsor', 'damping', 'acceleration']
         lpos = self.area_size*0.2
@@ -481,6 +512,29 @@ class game_space:
             self.create_new_learner_agents(num_learners)
         if num_evolvable > 0:
             self.create_new_evolvable_agents(num_evolvable)
+
+    def make_genome_size(self):
+        input_len = sum([x[0] for x in self.net_desc])
+        if input_len != self.observation_size:
+            msg = "Observation size: " + str(self.observation_size)
+            msg += " does not match net_desc: " + str(self.net_desc)
+            print(msg)
+            sys.exit(0)
+        for index in range(len(self.net_desc)):
+            self.net_desc[index].append(self.action_size)
+        state_size = sum([x[0] for x in self.net_desc])
+        out_cat = sum([x[-1] for x in self.net_desc])
+        for item in self.net_desc:
+            gs = 0
+            for i in range(len(item)-1):
+                gs += item[i] * item[i+1]
+            self.genome_size.append(gs)
+        action_head = out_cat*self.action_size
+        self.genome_size.append(action_head)
+        self.net_desc.append([out_cat, self.action_size])
+        value_head = out_cat*1
+        self.genome_size.append(value_head)
+        self.net_desc.append([out_cat, 1])
 
     def step(self):
         self.apply_protector_physics()
@@ -710,10 +764,9 @@ class game_space:
                   learner,
                   color,
                   self.agent_start_energy,
-                  self.state_size,
                   self.action_size,
-                  self.hidden_size,
-                  genome)
+                  genome,
+                  self.net_desc)
         self.agents.append(a)
         index = len(self.agents)-1
         self.set_initial_agent_state(index)
@@ -1609,11 +1662,18 @@ class game_space:
         with open(self.savedir + "/genome_store.pkl", "rb") as f:
             self.genome_store = pickle.load(f)
 
-    def make_random_genome(self):
+    def make_weights(self, num):
         if self.integer_weights == False:
-            return np.random.uniform(-1*self.weight_range, self.weight_range, self.genome_size)
+            return np.random.uniform(-1*self.weight_range, self.weight_range,num)
         else:
-            return np.random.randint(-1*self.weight_range, self.weight_range+1, self.genome_size)
+            return np.random.randint(-1*self.weight_range, self.weight_range+1, num)
+
+    def make_random_genome(self):
+        genome = []
+        for size in self.genome_size:
+            weights = self.make_weights(size)
+            genome.append(weights)
+        genome = np.array(genome)
         return genome
 
     def make_random_genomes(self, num):
@@ -1623,37 +1683,42 @@ class game_space:
             genome_pool.append(genome)
         return genome_pool
 
-    def reproduce_genome(self, g1, g2, num_offspring):
-        new_genomes = []
-        for _ in range(num_offspring):
-            s = random.randint(10, len(g1)-10)
-            g3 = np.concatenate((g1[:s], g2[s:]))
-            new_genomes.append(g3)
-            g4 = np.concatenate((g2[:s], g1[s:]))
-            new_genomes.append(g4)
-        return new_genomes
+    def reproduce_genome(self, genome1, genome2):
+        new_genome = []
+        for index in range(len(genome1)):
+            g1 = genome1[index]
+            g2 = genome2[index]
+            entry = []
+            split = random.randint(1, len(g1))
+            if random.random() < 0.5:
+                entry = np.concatenate((g1[:split], g2[split:]))
+            else:
+                entry = np.concatenate((g2[:split], g1[split:]))
+            new_genome.append(entry)
+        return new_genome
 
-    def mutate_genome(self, g, num_mutations):
-        new_genomes = []
-        for _ in range(num_mutations):
-            n = max(1, int(self.mutation_rate * len(g)))
-            indices = random.sample(range(len(g)), n)
-            gm = g
-            for index in indices:
+    def mutate_genome(self, genome):
+        new_genome = []
+        for index in range(len(genome)):
+            gen = genome[index]
+            gen_len = len(gen)
+            mutation_chance = (1/self.mutation_rate) * gen_len
+            if random.random() < mutation_chance:
+                num_mutations = min(1, int(mutation_chance))
+                index = random.sample(range(gen_len), num_mutations)
                 val = 0
                 if self.integer_weights == False:
                     val = random.uniform(-1*self.weight_range, self.weight_range)
                 else:
                     val = random.randint(-1*self.weight_range, self.weight_range+1)
-                gm[index] = val
-            new_genomes.append(gm)
-        return new_genomes
+                gen[index] = val
+            new_genome.append(gen)
+        return new_genome
 
     def make_new_offspring(self, genomes):
         parents = random.sample(genomes, 2)
-        offspring = self.reproduce_genome(parents[0], parents[1], 1)
-        chosen = random.choice(offspring)
-        mutated = self.mutate_genome(chosen, 1)[0]
+        offspring = self.reproduce_genome(parents[0], parents[1])
+        mutated = self.mutate_genome(offspring)
         return mutated
 
     def add_previous_agent(self, entry):
@@ -1738,20 +1803,25 @@ class game_space:
 
     def get_genetic_diversity(self):
         if len(self.genome_store) < self.genome_store_size:
-            return []
-        unique = set()
+            return [[], 0]
+        unique = []
+        for item in self.genome_store[0]:
+            unique.append(set())
         for index in range(len(self.genome_store)):
             gen = self.genome_store[index][0]
-            msg = ""
-            for g in gen:
-                c = "Z"
-                if int(g) == -1:
-                    c = "M"
-                elif int(g) == 1:
-                    c = "P"
-                msg += c
-            unique.add(msg)
-        return list(unique)
+            for count, g in enumerate(gen):
+                msg = ""
+                for g1 in g:
+                    c = "Z"
+                    if int(g1) == -1:
+                        c = "M"
+                    elif int(g1) == 1:
+                        c = "P"
+                    msg += c
+                unique[count].add(msg)
+        diversity = [len(x) for x in unique]
+        mean_diversity = np.mean(diversity)
+        return diversity, mean_diversity
 
 
 ######################
@@ -1829,6 +1899,7 @@ class game_space:
         return msg
 
     def print_run_stats(self):
+        genome_size = [x for x in self.genome_size]
         msg = ""
         msg += "Starting agents: " + str(self.num_agents)
         msg += "  learners: " + "%.2f"%(self.learners*self.num_agents)
@@ -1836,9 +1907,10 @@ class game_space:
         msg += "  predators: " + str(self.num_predators)
         msg += "\n"
         msg += "Action size: " + str(self.action_size)
-        msg += "  state_size: " + str(self.state_size)
-        msg += "  hidden: " + str(self.hidden_size)
-        msg += "  genome size: " + str(self.genome_size)
+        msg += "  state_size: " + str(self.observation_size)
+        msg += "  genome size: " + str(genome_size)
+        msg += "\n"
+        msg += "net_desc: " + str(self.net_desc)
         msg += "\n\n"
         return msg
 
@@ -1901,9 +1973,10 @@ class game_space:
         msg += "Top " + str(gss) + " agents in genome store: learning: " + str(gsal)
         msg += "  evolving: " + str(gsae)
         msg += "\n\n"
-        gsd = self.get_genetic_diversity()
-        self.record_stats("genetic diversity", len(gsd))
-        msg += "Genetic diversity: " + str(len(gsd))
+        gsd, mean_gsd = self.get_genetic_diversity()
+        self.record_stats("genetic diversity", mean_gsd)
+        msg += "Genetic diversity: " + str(gsd)
+        msg += "  mean: " + "%.2f"%mean_gsd
         msg += "\n"
         msg += "Items in genome store: " + str(gsitems)
         msg += "\n"
