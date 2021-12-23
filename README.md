@@ -59,7 +59,9 @@ However, the way we'd approach this from an evolutionary standpoint would be to 
 
 `
 mutation_chance = (1/mutation_rate) * len(genome)
+
 if randon.random() < mutation_chance:
+
   mutate_one_index()
 `
 
