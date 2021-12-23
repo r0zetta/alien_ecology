@@ -55,7 +55,11 @@ Connect the concatenated 12 values into a softmax layer of 4 values, i.e. 48 par
 
 Total parameters: 240 (252 with A2C)
 
-However, the way we'd approach this from an evolutionary standpoint would be to store the parameters as not one long genome, but four - one for each of the three task sub-blocks, and one for the final layer. When reproducing, we'd combine and mutate each block separately, thus preserving learned features for each task.
+However, the way we'd approach this from an evolutionary standpoint would be to store the parameters as not one long genome, but four - one for each of the three task sub-blocks, and one for the final layer. When reproducing, we'd combine and mutate each block separately, thus preserving learned features for each task. Since each genome is very small, make sure to apply a muatation rate as follows:
+
+mutation_chance = (1/mutation_rate) * len(genome)
+if randon.random() < mutation_chance:
+  mutate_one_index()
 
 
 For now, I hope to leave the code in a state that allows anyone who downloads the repository to run and enjoy watching organisms evolve. I'll update this repository with new findings and discoveries as I make them.
