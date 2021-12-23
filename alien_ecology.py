@@ -396,7 +396,6 @@ class game_space:
         self.resets = 0
         self.rebirths = 0
         self.continuations = 0
-        self.births = 0
         self.deaths = 0
         self.eaten = 0
         self.num_recent_actions = num_recent_actions
@@ -617,7 +616,6 @@ class game_space:
     def update_position(self, xpos, ypos):
         return self.update_position_toroid(xpos, ypos)
 
-
     def update_position_toroid(self, xpos, ypos):
         nx = xpos
         ny = ypos
@@ -662,15 +660,24 @@ class game_space:
         elif orient == 7:
             yv = ypos + 0.5*distance
             xv = xpos - 0.5*distance
+        nxv, nyv = self.viewpoint_select(xv, yv)
+        return nxv, nyv
+
+    def viewpoint_select(self, xv, yv):
+        return self.viewpoint_toroid(xv, yv)
+
+    def viewpoint_toroid(self, xv, yv):
+        nxv = xv
+        nyv = yv
         if xv > self.area_size:
-            xv -= self.area_size
+            nxv -= self.area_size
         if xv < 0:
-            xv += self.area_size
+            nxv += self.area_size
         if yv > self.area_size:
-            yv -= self.area_size
+            nyv -= self.area_size
         if yv < 0:
-            yv += self.area_size
-        return xv, yv
+            nyv += self.area_size
+        return nxv, nyv
 
     def get_viewpoint_in_direction(self, index, direction):
         xpos = self.agents[index].xpos
@@ -1895,7 +1902,6 @@ class game_space:
         msg = ""
         msg += "Spawns: " + str(self.spawns)
         msg += "  resets: " + str(self.resets)
-        msg += "  births: " + str(self.births)
         msg += "  rebirths: " + str(self.rebirths)
         msg += "  continuations: " + str(self.continuations)
         msg += "  deaths: " + str(self.deaths)
@@ -1995,10 +2001,6 @@ class game_space:
         os.system('clear')
         print(gs.get_stats())
 
-# Stuff to record:
-# mean stats (age, fitness, etc.) of previous agents
-# balance of learning/evolving in genome store and previous agents
-
 # update callback for ursina
 def update():
     gs.step()
@@ -2092,14 +2094,3 @@ else:
     gs = game_space(visuals=False)
     while True:
         gs.step()
-
-# To do:
-# Normalize inputs
-# Start with a smaller number of inputs
-# Reward on high entropy action prob dist
-# Entropy calculated on successful actions
-# Scale entropy for fitness
-# Devise intrinsic reward/fitness scheme
-# Split tasks?
-#
-# move params into a config dict
