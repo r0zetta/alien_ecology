@@ -370,19 +370,19 @@ class game_space:
                  area_size=70,
                  num_agents=20,
                  agent_start_energy=200,
-                 agent_energy_drain=1,
+                 agent_energy_drain=0,
                  agent_view_distance=5,
-                 num_protectors=3,
+                 num_protectors=0,
                  protector_safe_distance=5,
                  num_predators=6,
                  predator_view_distance=6,
                  predator_kill_distance=2,
-                 num_food=20,
+                 num_food=0,
                  use_zones=False,
                  visuals=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=200,
+                 genome_store_size=300,
                  fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=0.9,
                  rebirth_genome_store=0.9,
@@ -444,28 +444,28 @@ class game_space:
                         #"rotate_left",
                         #"flip",
                         #"propel",
-                        #"null",
+                        "null",
                         "propel_up",
                         "propel_right",
                         "propel_down",
                         "propel_left",
                         ]
         self.observations = [
-                             #"agents_up",
+                             #["agents_up",
                              #"agents_right",
                              #"agents_down",
                              #"agents_left",
-                             #"visible_agents",
-                             ["food_up",
-                             "food_right",
-                             "food_down",
-                             "food_left"],
+                             #"visible_agents"],
+                             #["food_up",
+                             #"food_right",
+                             #"food_down",
+                             #"food_left"],
                              #"visible_food",
-                             ["protectors_up",
-                             "protectors_right",
-                             "protectors_down",
-                             "protectors_left",
-                             "protector_in_range"],
+                             #["protectors_up",
+                             #"protectors_right",
+                             #"protectors_down",
+                             #"protectors_left",
+                             #"protector_in_range"],
                              #"visible_protectors",
                              ["predators_up",
                              "predators_right",
@@ -1752,7 +1752,7 @@ class game_space:
         if len(self.previous_agents) < num_g:
             num_g = len(self.previous_agents)
         genomes = self.get_best_previous_genomes(num_g, atype)
-        if len(genomes) > 0:
+        if len(genomes) > 1:
             return self.make_new_offspring(genomes)
         else:
             return self.make_random_genome()
@@ -1782,7 +1782,7 @@ class game_space:
         if len(self.genome_store) < num_g:
             num_g = len(self.genome_store)
         genomes = self.get_best_genomes_from_store(num_g, atype)
-        if len(genomes) > 0:
+        if len(genomes) > 1:
             return self.make_new_offspring(genomes)
         else:
             return self.make_random_genome()
@@ -1818,7 +1818,7 @@ class game_space:
         return msg
 
     def get_genetic_diversity(self):
-        if len(self.genome_store) < self.genome_store_size:
+        if len(self.genome_store) < 1:
             return [[], 0]
         unique = []
         for item in self.genome_store[0]:
@@ -1908,6 +1908,7 @@ class game_space:
 
     def print_run_stats(self):
         genome_size = [x for x in self.genome_size]
+        params = sum([x for x in self.genome_size])
         msg = ""
         msg += "Starting agents: " + str(self.num_agents)
         msg += "  learners: " + "%.2f"%(self.learners*self.num_agents)
@@ -1917,6 +1918,7 @@ class game_space:
         msg += "Action size: " + str(self.action_size)
         msg += "  state_size: " + str(self.observation_size)
         msg += "  genome size: " + str(genome_size)
+        msg += "  params: " + str(params)
         msg += "\n"
         msg += "net_desc: " + str(self.net_desc)
         msg += "\n\n"
@@ -1944,7 +1946,7 @@ class game_space:
         bpal = 0
         bpae = 0
         pss = int(self.num_previous_agents * self.top_n)
-        if len(self.previous_agents) > pss:
+        if len(self.previous_agents) >= pss:
             bpi = self.get_best_previous_agents(pss, None)
             bpal = sum([self.previous_agents[i][5] for i in bpi])
             bpae = pss - bpal
@@ -1955,7 +1957,7 @@ class game_space:
         gsal = 0
         gsae = 0
         gss = int(self.genome_store_size * self.top_n)
-        if len(self.genome_store) > gss:
+        if len(self.genome_store) >= gss:
             gsi = self.get_best_agents_from_store(gss, None)
             gsal = sum([self.genome_store[i][5] for i in gsi])
             gsae = gss - gsal
