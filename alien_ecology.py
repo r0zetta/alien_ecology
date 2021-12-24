@@ -382,11 +382,11 @@ class game_space:
                  visuals=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=300,
+                 genome_store_size=100,
                  fitness_index=2, # 1: fitness, 2: age
-                 respawn_genome_store=0.9,
-                 rebirth_genome_store=0.9,
-                 top_n=0.3,
+                 respawn_genome_store=0.95,
+                 rebirth_genome_store=0.95,
+                 top_n=0.5,
                  save_every=1000,
                  record_every=50,
                  savedir="alien_ecology_save",
@@ -1673,6 +1673,10 @@ class game_space:
         genome = []
         for size in self.genome_size:
             weights = self.make_weights(size)
+            if self.integer_weights == True:
+                for index in range(len(weights)):
+                    if weights[index] == 0.0:
+                        weights[index] = np.random.uniform(-0.3, 0.3)
             genome.append(weights)
         genome = np.array(genome)
         return genome
