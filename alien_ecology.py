@@ -382,12 +382,12 @@ class game_space:
                  visuals=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=300,
+                 genome_store_size=200,
                  fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=0.9,
                  rebirth_genome_store=0.9,
-                 top_n=0.2,
-                 save_every=100,
+                 top_n=0.3,
+                 save_every=1000,
                  record_every=50,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
@@ -917,31 +917,20 @@ class game_space:
     def reset_agents(self, reset):
         for index in reset:
             l = int(self.agents[index].learnable)
-            ae = self.entropy(self.agents[index].previous_actions) * 0.1
+            ae = self.entropy(self.agents[index].previous_actions)
             a = self.agents[index].age
-            h = self.agents[index].happiness
+            h = self.agents[index].happiness + ae*100
             d = self.agents[index].distance_travelled
             f = a + h + d
             g = self.agents[index].model.get_w()
             entry = [g, f, a, h, d, l]
-            a1 = 0
-            a2 = 0
-            store = self.previous_agents
-            if random.random() < self.rebirth_genome_store:
-                store = self.genome_store
-            if len(store) > 0:
-                a1 = np.mean([x[self.fitness_index] for x in store])
             self.store_genome(entry)
             self.add_previous_agent(entry)
-            if len(store) > 0:
-                a2 = np.mean([x[self.fitness_index] for x in store])
-            reward = max(-1, (a2 - a1) * 10)
-            reward = 0
-            if reward == 0:
-                reward = ((a-self.agent_start_energy)/self.agent_start_energy) + ae
-            reward = np.float32(reward)
             if len(self.agents[index].model.rewards) > 0:
-                self.agents[index].model.rewards[-1] += reward
+                reward = ((a-self.agent_start_energy)/self.agent_start_energy) + (ae*0.1)
+                reward += self.agents[index].model.rewards[-1]
+                reward = np.float32(reward)
+                self.agents[index].model.rewards[-1] = reward
             self.agents[index].previous_stats.append(entry)
             self.deaths += 1
             self.resets += 1
@@ -1757,9 +1746,11 @@ class game_space:
             return self.make_random_genomes(num)
 
     def make_genome_from_previous(self, atype):
+        if len(self.previous_agents) < 1:
+            return self.make_random_genome()
         num_g = int(self.num_previous_agents * self.top_n)
         if len(self.previous_agents) < num_g:
-            return self.make_random_genome()
+            num_g = len(self.previous_agents)
         genomes = self.get_best_previous_genomes(num_g, atype)
         if len(genomes) > 0:
             return self.make_new_offspring(genomes)
@@ -1785,9 +1776,11 @@ class game_space:
             return self.make_random_genomes(num)
 
     def make_genome_from_store(self, atype):
+        if len(self.genome_store) < 1:
+            return self.make_random_genome()
         num_g = int(self.genome_store_size * self.top_n)
         if len(self.genome_store) < num_g:
-            return self.make_random_genome()
+            num_g = len(self.genome_store)
         genomes = self.get_best_genomes_from_store(num_g, atype)
         if len(genomes) > 0:
             return self.make_new_offspring(genomes)
@@ -1813,6 +1806,17 @@ class game_space:
         else:
             return self.make_genome_from_previous(atype)
 
+    def gen_printable(self, gen):
+        msg = ""
+        for item in gen:
+            ch = "Z"
+            if int(item) == -1:
+                ch = "M"
+            elif int(item) == 1:
+                ch = "P"
+            msg += ch
+        return msg
+
     def get_genetic_diversity(self):
         if len(self.genome_store) < self.genome_store_size:
             return [[], 0]
@@ -1822,15 +1826,8 @@ class game_space:
         for index in range(len(self.genome_store)):
             gen = self.genome_store[index][0]
             for count, g in enumerate(gen):
-                msg = ""
-                for g1 in g:
-                    c = "Z"
-                    if int(g1) == -1:
-                        c = "M"
-                    elif int(g1) == 1:
-                        c = "P"
-                    msg += c
-                unique[count].add(msg)
+                gpr = self.gen_printable(g)
+                unique[count].add(gpr)
         diversity = [len(x) for x in unique]
         mean_diversity = np.mean(diversity)
         return diversity, mean_diversity
