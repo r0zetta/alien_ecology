@@ -368,7 +368,7 @@ class game_space:
                  integer_weights=True,
                  weight_range=1,
                  area_size=70,
-                 num_agents=20,
+                 num_agents=10,
                  agent_start_energy=100,
                  agent_energy_drain=1,
                  agent_view_distance=5,
@@ -555,7 +555,7 @@ class game_space:
                 self.save_genomes()
         if self.save_every > 0 and self.steps % 500 == 0:
             self.save_stats()
-        if self.steps % 20 == 0:
+        if self.steps % 50 == 0:
             self.print_stats()
         self.steps += 1
 
@@ -1948,32 +1948,6 @@ class game_space:
         self.record_stats("learning agents", l_agents)
         e_agents = len(self.agents) - l_agents
         self.record_stats("evolving agents", l_agents)
-        agent_energy = int(sum([x.energy for x in self.agents]))
-        self.record_stats("agent energy", agent_energy)
-        gsitems = len(self.genome_store)
-        mpf = np.mean([x[1] for x in self.previous_agents])
-        bpal = 0
-        bpae = 0
-        pss = int(self.num_previous_agents * self.top_n)
-        if len(self.previous_agents) >= pss:
-            bpi = self.get_best_previous_agents(pss, None)
-            bpal = sum([self.previous_agents[i][5] for i in bpi])
-            bpae = pss - bpal
-            bplp = (bpal/pss)*100
-            self.record_stats("learned_in_top_prev", bplp)
-            bpep = (bpae/pss)*100
-            self.record_stats("evolved_in_top_prev", bpep)
-        gsal = 0
-        gsae = 0
-        gss = int(self.genome_store_size * self.top_n)
-        if len(self.genome_store) >= gss:
-            gsi = self.get_best_agents_from_store(gss, None)
-            gsal = sum([self.genome_store[i][5] for i in gsi])
-            gsae = gss - gsal
-            gplp = (gsal/gss)*100
-            self.record_stats("learned_in_top_gs", gplp)
-            gpep = (gsae/gss)*100
-            self.record_stats("evolved_in_top_gs", gpep)
 
         msg = ""
         msg += self.print_run_stats()
@@ -1987,15 +1961,9 @@ class game_space:
         msg += self.print_spawn_stats()
         msg += "\n"
         msg += self.make_labels(self.previous_agents, "Previous ", "prev")
-        msg += "Items in genome store: " + str(gsitems)
         msg += "\n"
         msg += self.make_labels(self.genome_store, "Genome store ", "gs")
-        msg += "Top " + str(pss) + " previous agents: learning: " + str(bpal)
-        msg += "  evolving: " + str(bpae)
         msg += "\n"
-        msg += "Top " + str(gss) + " agents in genome store: learning: " + str(gsal)
-        msg += "  evolving: " + str(gsae)
-        msg += "\n\n"
         gsd, mean_gsd = self.get_genetic_diversity()
         self.record_stats("genetic diversity", mean_gsd)
         msg += "Genetic diversity: " + str(gsd)
@@ -2103,3 +2071,13 @@ else:
     gs = game_space(visuals=False)
     while True:
         gs.step()
+
+# Inspired my matrix:
+# multiple randomly moving shooters
+# agents die if hit by bullet
+# agents kill shooter if they collide with it
+#
+
+
+
+
