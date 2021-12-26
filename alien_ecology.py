@@ -364,29 +364,29 @@ class game_space:
                  num_recent_actions=1000,
                  learners=0.50,
                  evaluate_learner_every=30,
-                 mutation_rate=0.0001,
+                 mutation_rate=0.001,
                  integer_weights=True,
                  weight_range=1,
                  area_size=70,
                  num_agents=20,
-                 agent_start_energy=200,
-                 agent_energy_drain=0,
+                 agent_start_energy=100,
+                 agent_energy_drain=1,
                  agent_view_distance=5,
-                 num_protectors=0,
+                 num_protectors=3,
                  protector_safe_distance=5,
                  num_predators=6,
                  predator_view_distance=6,
                  predator_kill_distance=2,
-                 num_food=0,
+                 num_food=20,
                  use_zones=False,
                  visuals=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=100,
+                 genome_store_size=200,
                  fitness_index=2, # 1: fitness, 2: age
-                 respawn_genome_store=0.95,
-                 rebirth_genome_store=0.95,
-                 top_n=0.5,
+                 respawn_genome_store=0.90,
+                 rebirth_genome_store=0.90,
+                 top_n=1.0,
                  save_every=1000,
                  record_every=50,
                  savedir="alien_ecology_save",
@@ -456,16 +456,16 @@ class game_space:
                              #"agents_down",
                              #"agents_left",
                              #"visible_agents"],
-                             #["food_up",
-                             #"food_right",
-                             #"food_down",
-                             #"food_left"],
+                             ["food_up",
+                             "food_right",
+                             "food_down",
+                             "food_left"],
                              #"visible_food",
-                             #["protectors_up",
-                             #"protectors_right",
-                             #"protectors_down",
-                             #"protectors_left",
-                             #"protector_in_range"],
+                             ["protectors_up",
+                             "protectors_right",
+                             "protectors_down",
+                             "protectors_left",
+                             "protector_in_range"],
                              #"visible_protectors",
                              ["predators_up",
                              "predators_right",
@@ -927,7 +927,7 @@ class game_space:
             self.store_genome(entry)
             self.add_previous_agent(entry)
             if len(self.agents[index].model.rewards) > 0:
-                reward = ((a-self.agent_start_energy)/self.agent_start_energy) + (ae*0.1)
+                reward = ((a-self.agent_start_energy)/self.agent_start_energy) * 10 + (ae*0.1)
                 reward += self.agents[index].model.rewards[-1]
                 reward = np.float32(reward)
                 self.agents[index].model.rewards[-1] = reward
@@ -1825,8 +1825,9 @@ class game_space:
         if len(self.genome_store) < 1:
             return [[], 0]
         unique = []
-        for item in self.genome_store[0]:
-            unique.append(set())
+        for item in self.genome_store[0][0]:
+            if len(item) > 0:
+                unique.append(set())
         for index in range(len(self.genome_store)):
             gen = self.genome_store[index][0]
             for count, g in enumerate(gen):
