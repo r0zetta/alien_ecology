@@ -555,7 +555,8 @@ class game_space:
                 self.save_genomes()
         if self.save_every > 0 and self.steps % 500 == 0:
             self.save_stats()
-        self.print_stats()
+        if self.steps % 20 == 0:
+            self.print_stats()
         self.steps += 1
 
 #################
