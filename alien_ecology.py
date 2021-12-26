@@ -363,7 +363,7 @@ class game_space:
                  num_prev_states=1,
                  num_recent_actions=1000,
                  learners=0.50,
-                 evaluate_learner_every=30,
+                 evaluate_learner_every=10,
                  mutation_rate=0.001,
                  integer_weights=True,
                  weight_range=1,
@@ -1863,9 +1863,12 @@ class game_space:
         if len(var) < 1:
             return ""
         lmsg = ""
-        conds = ["evolving", "learning"]
+        conds = ["evolving", "learning", "all"]
         for cond, lab in enumerate(conds):
-            nvar = [x for x in var if x[5]==cond]
+            if cond < 2:
+                nvar = [x for x in var if x[5]==cond]
+            else:
+                nvar = var
             if len(nvar) > 0:
                 lmsg += affix + lab + " agent (" + str(len(nvar)) + ") stats:"
                 lmsg += "\n"
@@ -1981,7 +1984,11 @@ class game_space:
         msg += "\n\n"
         #msg += self.print_new_state_stats()
         msg += self.print_spawn_stats()
+        msg += "\n"
         msg += self.make_labels(self.previous_agents, "Previous ", "prev")
+        msg += "Items in genome store: " + str(gsitems)
+        msg += "\n"
+        msg += self.make_labels(self.genome_store, "Genome store ", "gs")
         msg += "Top " + str(pss) + " previous agents: learning: " + str(bpal)
         msg += "  evolving: " + str(bpae)
         msg += "\n"
@@ -1993,9 +2000,6 @@ class game_space:
         msg += "Genetic diversity: " + str(gsd)
         msg += "  mean: " + "%.2f"%mean_gsd
         msg += "\n"
-        msg += "Items in genome store: " + str(gsitems)
-        msg += "\n"
-        msg += self.make_labels(self.genome_store, "Genome store ", "gs")
         for atype in self.agent_types:
             #msg += self.print_action_dist(atype)
             self.print_action_dist(atype)
