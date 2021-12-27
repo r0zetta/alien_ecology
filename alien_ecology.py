@@ -365,12 +365,13 @@ class game_space:
                  learners=0.50,
                  evaluate_learner_every=10,
                  mutation_rate=0.001,
+                 evolve_by_block=False,
                  integer_weights=True,
                  weight_range=1,
                  area_size=70,
                  num_agents=10,
                  agent_start_energy=50,
-                 agent_energy_drain=1,
+                 agent_energy_drain=-0.1,
                  agent_view_distance=5,
                  num_protectors=3,
                  protector_safe_distance=7,
@@ -387,7 +388,7 @@ class game_space:
                  respawn_genome_store=0.90,
                  rebirth_genome_store=0.90,
                  top_n=1.0,
-                 save_every=2000,
+                 save_every=5000,
                  record_every=50,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
@@ -407,6 +408,8 @@ class game_space:
         self.top_n = top_n
         self.learners = learners
         self.evaluate_learner_every = evaluate_learner_every
+        self.mutation_rate = mutation_rate
+        self.evolve_by_block = evolve_by_block
         self.integer_weights = integer_weights
         self.weight_range = weight_range
         self.visuals = visuals
@@ -431,7 +434,6 @@ class game_space:
         self.use_zones = use_zones
         self.agent_view_distance = agent_view_distance
         self.visible_area = math.pi*(self.agent_view_distance**2)
-        self.mutation_rate = mutation_rate
         self.agent_types = ["evolving",
                             "learning"]
         self.agent_actions = {}
@@ -459,15 +461,15 @@ class game_space:
                              ["food_up",
                              "food_right",
                              "food_down",
-                             "food_left",
+                             "food_left"],
                              #"visible_food",
-                             "protectors_up",
+                             ["protectors_up",
                              "protectors_right",
                              "protectors_down",
                              "protectors_left",
-                             "protector_in_range",
+                             "protector_in_range"],
                              #"visible_protectors",
-                             "predators_up",
+                             ["predators_up",
                              "predators_right",
                              "predators_down",
                              "predators_left"],
@@ -478,7 +480,7 @@ class game_space:
         self.net_desc = []
         for index, item in enumerate(self.observations):
             obs = len(self.observations[index])
-            hidden = obs*2
+            hidden = obs*1
             entry = [obs, hidden]
             self.net_desc.append(entry)
         self.action_size = len(self.actions)
@@ -1690,7 +1692,10 @@ class game_space:
         return genome_pool
 
     def reproduce_genome(self, genome1, genome2):
-        return self.reproduce_genome_full(genome1, genome2)
+        if self.evolve_by_block == True:
+            return self.reproduce_genome_block(genome1, genome2)
+        else:
+            return self.reproduce_genome_full(genome1, genome2)
 
     def reproduce_genome_full(self, genome1, genome2):
         sizes = [len(x) for x in genome1]
@@ -1731,7 +1736,10 @@ class game_space:
         return new_genome
 
     def mutate_genome(self, genome):
-        return self.mutate_genome_full(genome)
+        if self.evolve_by_block == True:
+            return self.mutate_genome_block(genome)
+        else:
+            return self.mutate_genome_full(genome)
 
     def mutate_genome_block(self, genome):
         new_genome = []
