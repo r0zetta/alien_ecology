@@ -365,7 +365,7 @@ class game_space:
                  learners=0.50,
                  evaluate_learner_every=10,
                  mutation_rate=0.001,
-                 evolve_by_block=False,
+                 evolve_by_block=True,
                  integer_weights=True,
                  weight_range=1,
                  area_size=70,
@@ -930,7 +930,7 @@ class game_space:
             self.store_genome(entry)
             self.add_previous_agent(entry)
             if len(self.agents[index].model.rewards) > 0:
-                reward = ((a-self.agent_start_energy)/self.agent_start_energy) * 10 + (ae*0.1)
+                reward = ((a-self.agent_start_energy)/self.agent_start_energy) + (ae*0.1)
                 reward += self.agents[index].model.rewards[-1]
                 reward = np.float32(reward)
                 self.agents[index].model.rewards[-1] = reward
@@ -2054,7 +2054,7 @@ def update():
             xabs = gs.agents[index].xpos
             yabs = gs.agents[index].ypos
             zabs = gs.agents[index].zpos
-            s = 0.5 + ((gs.agents[index].energy/gs.agent_start_energy)*0.5)
+            s = 0.5 + ((gs.agents[index].energy/200)*0.5)
             gs.agents[index].entity.scale = (s,s,s)
             gs.agents[index].entity.position = (xabs, yabs, zabs)
             orient = gs.agents[index].orient
@@ -2062,7 +2062,7 @@ def update():
             for n in range(gs.agents[index].trail_length):
                 item = gs.agents[index].previous_positions[n]
                 x, y, o, ss = item
-                ss = 0.5 + ((gs.agents[index].energy/gs.agent_start_energy)*0.5)
+                ss = 0.5 + ((gs.agents[index].energy/200)*0.5)
                 gs.agents[index].trail_entities[n].position = (x, y, zabs)
                 gs.agents[index].trail_entities[n].rotation = (45*o, 90, 0)
                 gs.agents[index].trail_entities[n].scale = (ss, ss, ss)
@@ -2142,6 +2142,10 @@ else:
 # agents kill shooter if they collide with it
 #
 # Predators cause energy drain in a radius instead of eating agents
+# Add non-toroid version
+# - edges need to be an input to models
+#
+# implement num_prev_states into current architecture
 
 
 
