@@ -369,25 +369,25 @@ class game_space:
                  weight_range=1,
                  area_size=70,
                  num_agents=10,
-                 agent_start_energy=100,
+                 agent_start_energy=50,
                  agent_energy_drain=1,
                  agent_view_distance=5,
                  num_protectors=3,
-                 protector_safe_distance=5,
+                 protector_safe_distance=7,
                  num_predators=6,
-                 predator_view_distance=6,
+                 predator_view_distance=5,
                  predator_kill_distance=2,
                  num_food=20,
                  use_zones=False,
                  visuals=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=200,
+                 genome_store_size=1000,
                  fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=0.90,
                  rebirth_genome_store=0.90,
                  top_n=1.0,
-                 save_every=1000,
+                 save_every=2000,
                  record_every=50,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
@@ -459,15 +459,15 @@ class game_space:
                              ["food_up",
                              "food_right",
                              "food_down",
-                             "food_left"],
+                             "food_left",
                              #"visible_food",
-                             ["protectors_up",
+                             "protectors_up",
                              "protectors_right",
                              "protectors_down",
                              "protectors_left",
-                             "protector_in_range"],
+                             "protector_in_range",
                              #"visible_protectors",
-                             ["predators_up",
+                             "predators_up",
                              "predators_right",
                              "predators_down",
                              "predators_left"],
@@ -1690,6 +1690,33 @@ class game_space:
         return genome_pool
 
     def reproduce_genome(self, genome1, genome2):
+        return self.reproduce_genome_full(genome1, genome2)
+
+    def reproduce_genome_full(self, genome1, genome2):
+        sizes = [len(x) for x in genome1]
+        cg1 = []
+        for item in genome1:
+            cg1.extend(item)
+        cg2 = []
+        for item in genome1:
+            cg2.extend(item)
+        split = random.randint(1, len(cg1))
+        entry = []
+        if random.random() < 0.5:
+            entry.extend(cg1[:split])
+            entry.extend(cg2[split:])
+        else:
+            entry.extend(cg2[:split])
+            entry.extend(cg1[split:])
+        new_genome = []
+        i = 0
+        for s in sizes:
+            b = entry[i:i+s]
+            new_genome.append(b)
+            i += s
+        return new_genome
+
+    def reproduce_genome_block(self, genome1, genome2):
         new_genome = []
         for index in range(len(genome1)):
             g1 = genome1[index]
@@ -1704,21 +1731,50 @@ class game_space:
         return new_genome
 
     def mutate_genome(self, genome):
+        return self.mutate_genome_full(genome)
+
+    def mutate_genome_block(self, genome):
         new_genome = []
         for index in range(len(genome)):
             gen = genome[index]
             gen_len = len(gen)
-            mutation_chance = (1/self.mutation_rate) * gen_len
+            mutation_chance = self.mutation_rate * gen_len
             if random.random() < mutation_chance:
-                num_mutations = min(1, int(mutation_chance))
-                index = random.sample(range(gen_len), num_mutations)
+                index = random.choice(range(gen_len))
                 val = 0
                 if self.integer_weights == False:
                     val = random.uniform(-1*self.weight_range, self.weight_range)
                 else:
                     val = random.randint(-1*self.weight_range, self.weight_range+1)
+                    if val == 0.0:
+                        val = np.random.uniform(-0.3, 0.3)
                 gen[index] = val
             new_genome.append(gen)
+        return new_genome
+
+    def mutate_genome_full(self, genome):
+        sizes = [len(x) for x in genome]
+        cg = []
+        for item in genome:
+            cg.extend(item)
+        gen_len = len(cg)
+        mutation_chance = self.mutation_rate * gen_len
+        if random.random() < mutation_chance:
+            index = random.choice(range(gen_len))
+            val = 0
+            if self.integer_weights == False:
+                val = random.uniform(-1*self.weight_range, self.weight_range)
+            else:
+                val = random.randint(-1*self.weight_range, self.weight_range+1)
+                if val == 0.0:
+                    val = np.random.uniform(-0.3, 0.3)
+            cg[index] = val
+        new_genome = []
+        i = 0
+        for s in sizes:
+            b = cg[i:i+s]
+            new_genome.append(b)
+            i += s
         return new_genome
 
     def make_new_offspring(self, genomes):
@@ -2077,6 +2133,7 @@ else:
 # agents die if hit by bullet
 # agents kill shooter if they collide with it
 #
+# Predators cause energy drain in a radius instead of eating agents
 
 
 
