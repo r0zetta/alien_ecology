@@ -371,7 +371,7 @@ class game_space:
                  area_size=70,
                  num_agents=10,
                  agent_start_energy=50,
-                 agent_energy_drain=-0.1,
+                 agent_energy_drain=1,
                  agent_view_distance=5,
                  num_protectors=3,
                  protector_safe_distance=7,
@@ -385,11 +385,11 @@ class game_space:
                  num_previous_agents=100,
                  genome_store_size=1000,
                  fitness_index=2, # 1: fitness, 2: age
-                 respawn_genome_store=0.90,
-                 rebirth_genome_store=0.90,
+                 respawn_genome_store=1.00,
+                 rebirth_genome_store=1.00,
                  top_n=1.0,
                  save_every=5000,
-                 record_every=50,
+                 record_every=100,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
         self.steps = 1
@@ -487,6 +487,7 @@ class game_space:
         self.genome_size = []
         self.make_genome_size()
         self.genome_store = []
+        self.things = {}
         self.zone_types = ['attractor', 'repulsor', 'damping', 'acceleration']
         lpos = self.area_size*0.2
         rpos = self.area_size*0.8
@@ -510,7 +511,7 @@ class game_space:
         self.create_predators()
         self.create_protectors()
         self.create_genomes()
-        self.agents = []
+        self.things['agents'] = []
         num_learners = int(self.num_agents * self.learners)
         num_evolvable = int(self.num_agents - num_learners)
         if num_learners > 0:
@@ -555,7 +556,7 @@ class game_space:
         if self.save_every > 0:
             if self.steps % self.save_every == 0:
                 self.save_genomes()
-        if self.save_every > 0 and self.steps % 500 == 0:
+        if self.save_every > 0 and self.steps % 5000 == 0:
             self.save_stats()
         if self.steps % 50 == 0:
             self.print_stats()
@@ -683,8 +684,8 @@ class game_space:
         return nxv, nyv
 
     def get_viewpoint_in_direction(self, index, direction):
-        xpos = self.agents[index].xpos
-        ypos = self.agents[index].ypos
+        xpos = self.things['agents'][index].xpos
+        ypos = self.things['agents'][index].ypos
         distance = self.agent_view_distance
         xv, yv = self.viewpoint(xpos, ypos, direction, distance)
         return xv, yv
@@ -702,9 +703,9 @@ class game_space:
         return self.get_viewpoint_in_direction(index, 6)
 
     def get_viewpoint(self, index):
-        xpos = self.agents[index].xpos
-        ypos = self.agents[index].ypos
-        orient = self.agents[index].orient
+        xpos = self.things['agents'][index].xpos
+        ypos = self.things['agents'][index].ypos
+        orient = self.things['agents'][index].orient
         distance = self.agent_view_distance
         xv, yv = self.viewpoint(xpos, ypos, orient, distance)
         return xv, yv
@@ -742,26 +743,156 @@ class game_space:
                 besty = ypos
         return bestx, besty
 
+    def get_things_in_radius(self, ttype, xpos, ypos, radius):
+        ret = []
+        for i in range(len(self.things[ttype])):
+            ax = self.things[ttype][i].xpos
+            ay = self.things[ttype][i].ypos
+            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
+                if self.distance(xpos, ypos, ax, ay) <= radius:
+                    ret.append(i)
+        return ret
+
+    def get_visible_things(self, ttype, aindex):
+        xv, yv = self.get_viewpoint(aindex)
+        ret = self.get_things_in_radius(ttype, xv, yv, self.agent_view_distance*2)
+        return(len(ret))
+
+    def get_things_up(self, ttype, aindex):
+        xv, yv = self.get_viewpoint_up(aindex)
+        ret = self.get_things_in_radius(ttype, xv, yv, self.agent_view_distance)
+        return(len(ret))
+
+    def get_things_right(self, ttype, aindex):
+        xv, yv = self.get_viewpoint_right(aindex)
+        ret = self.get_things_in_radius(ttype, xv, yv, self.agent_view_distance)
+        return(len(ret))
+
+    def get_things_down(self, ttype, aindex):
+        xv, yv = self.get_viewpoint_down(aindex)
+        ret = self.get_things_in_radius(ttype, xv, yv, self.agent_view_distance)
+        return(len(ret))
+
+    def get_things_left(self, ttype, aindex):
+        xv, yv = self.get_viewpoint_left(aindex)
+        ret = self.get_things_in_radius(ttype, xv, yv, self.agent_view_distance)
+        return(len(ret))
+
+    def get_adjacent_thing_indices(self, ttype, aindex):
+        xpos = self.things['agents'][aindex].xpos
+        ypos = self.things['agents'][aindex].ypos
+        return self.get_things_in_radius(ttype, xpos, ypos, self.agent_view_distance)
+
+    def get_adjacent_thing_count(self, ttype, aindex):
+        xpos = self.things['agents'][aindex].xpos
+        ypos = self.things['agents'][aindex].ypos
+        ret = self.get_things_in_radius(ttype, xpos, ypos, self.agent_view_distance)
+        return len(ret)
+
+    def get_nearest_thing(self, ttype, aindex):
+        xpos = self.things['agents'][aindex].xpos
+        ypos = self.things['agents'][aindex].ypos
+        distances = []
+        for i in range(len(self.things[ttype])):
+            ax = self.things['agents'][i].xpos
+            ay = self.things['agents'][i].ypos
+            radius = self.agent_view_distance
+            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
+                distances.append(self.distance(xpos, ypos, ax, ay))
+        if len(distances) > 1:
+            shortest_index = np.argsort(distances, axis=0)[1]
+            shortest_value = distances[shortest_index]
+            return shortest_index, shortest_value
+        else:
+            return None, None
+
+    def apply_physics(self, ttype):
+        for index in range(len(self.things[ttype])):
+            self.apply_inertial_damping(ttype, index)
+
+    def apply_inertial_damping(self, ttype, index):
+        self.things[ttype][index].xvel = self.things[ttype][index].xvel * self.things[ttype][index].inertial_damping
+        self.things[ttype][index].yvel = self.things[ttype][index].yvel * self.things[ttype][index].inertial_damping
+
+    def rotate_right(self, ttype, index):
+        self.things[ttype][index].orient += 1
+        if self.things[ttype][index].orient > 7:
+            self.things[ttype][index].orient = 0
+        return 0
+
+    def rotate_left(self, ttype, index):
+        self.things[ttype][index].orient -= 1
+        if self.things[ttype][index].orient < 0:
+            self.things[ttype][index].orient = 7
+        return 0
+
+    def flip_thing(self, ttype, index):
+        self.things[ttype][index].orient += 4
+        if self.things[ttype][index].orient > 7:
+            self.things[ttype][index].orient -= 7
+        return 0
+
+    def propel_thing(self, ttype, index):
+        orient = self.things[ttype][index].orient
+        speed = self.things[ttype][index].speed
+        xvel = self.things[ttype][index].xvel
+        yvel = self.things[ttype][index].yvel
+        xv, yv = self.propel(xvel, yvel, orient, speed)
+        self.things[ttype][index].xvel = xv
+        self.things[ttype][index].yvel = yv
+        return 0
+
+    def propel_thing_in_direction(self, ttype, index, direction):
+        speed = self.things[ttype][index].speed
+        xvel = self.things[ttype][index].xvel
+        yvel = self.things[ttype][index].yvel
+        xv, yv = self.propel(xvel, yvel, direction, speed)
+        self.things[ttype][index].xvel = xv
+        self.things[ttype][index].yvel = yv
+        return 0
+
+    def propel_thing_up(self, ttype, index):
+        return self.propel_thing_in_direction(ttype, index, 0)
+
+    def propel_thing_right(self, ttype, index):
+        return self.propel_thing_in_direction(ttype, index, 2)
+
+    def propel_thing_down(self, ttype, index):
+        return self.propel_thing_in_direction(ttype, index, 4)
+
+    def propel_thing_left(self, ttype, index):
+        return self.propel_thing_in_direction(ttype, index, 6)
+
+    def update_thing_position(self, ttype, index):
+        xpos = self.things[ttype][index].xpos
+        xpos += self.things[ttype][index].xvel
+        ypos = self.things[ttype][index].ypos
+        ypos += self.things[ttype][index].yvel
+        xpos, ypos = self.update_position(xpos, ypos)
+        self.things[ttype][index].xpos = xpos
+        self.things[ttype][index].ypos = ypos
+
+
 ########################
 # Agent runtime routines
 ########################
     def set_agent_entity(self, index):
-        xabs = self.agents[index].xpos
-        yabs = self.agents[index].ypos
-        zabs = self.agents[index].zpos
-        s = 0.5 + ((self.agents[index].energy/self.agent_start_energy)*0.5)
-        texture = "textures/" + self.agents[index].color_str
-        self.agents[index].entity = Entity(model='sphere',
+        xabs = self.things['agents'][index].xpos
+        yabs = self.things['agents'][index].ypos
+        zabs = self.things['agents'][index].zpos
+        s = 0.5 + ((self.things['agents'][index].energy/self.agent_start_energy)*0.5)
+        texture = "textures/" + self.things['agents'][index].color_str
+        self.things['agents'][index].entity = Entity(model='sphere',
                                            color=color.white,
                                            scale=(s,s,s),
                                            position = (xabs, yabs, zabs),
                                            texture=texture)
-        for n in range(self.agents[index].trail_length):
-            item = self.agents[index].previous_positions[n]
+        for n in range(self.things['agents'][index].trail_length):
+            item = self.things['agents'][index].previous_positions[n]
             x, y, o, ss = item
-            ss = 0.5 + ((self.agents[index].energy/self.agent_start_energy)*0.5)
-            self.agents[index].trail_entities[n] = Entity( model='sphere',
-                                                           color=color.rgba(255,255,255,self.agents[index].trail_alphas[n]),
+            ss = 0.5 + ((self.things['agents'][index].energy/self.agent_start_energy)*0.5)
+            self.things['agents'][index].trail_entities[n] = Entity( model='sphere',
+                                                           color=color.rgba(255,255,255,self.things['agents'][index].trail_alphas[n]),
                                                            scale=(ss,ss,ss),
                                                            position = (x, y, zabs),
                                                            texture=texture)
@@ -781,8 +912,8 @@ class game_space:
                   self.action_size,
                   genome,
                   self.net_desc)
-        self.agents.append(a)
-        index = len(self.agents)-1
+        self.things['agents'].append(a)
+        index = len(self.things['agents'])-1
         self.set_initial_agent_state(index)
         if self.visuals == True:
             self.set_agent_entity(index)
@@ -814,83 +945,46 @@ class game_space:
         self.agent_actions[t] = ra
 
     def run_agent_actions(self):
-        for n in range(len(self.agents)):
-            action = int(self.agents[n].get_action())
-            self.agents[n].previous_actions.append(action)
+        for n in range(len(self.things['agents'])):
+            action = int(self.things['agents'][n].get_action())
+            self.things['agents'][n].previous_actions.append(action)
             atype = 0
-            if self.agents[n].learnable == True:
+            if self.things['agents'][n].learnable == True:
                 atype = 1
             self.record_recent_actions(action, atype)
             self.apply_agent_action(n, action)
             self.update_agent_position(n)
 
     def get_agents_in_radius(self, xpos, ypos, radius):
-        ret = []
-        for i in range(len(self.agents)):
-            ax = self.agents[i].xpos
-            ay = self.agents[i].ypos
-            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
-                if self.distance(xpos, ypos, ax, ay) <= radius:
-                    ret.append(i)
-        return ret
+        return self.get_things_in_radius('agents', xpos, ypos, radius)
 
-    def get_visible_agents(self, index):
-        xv, yv = self.get_viewpoint(index)
-        agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance*2)
-        return(len(agents))
+    def get_visible_agents(self, aindex):
+        return self.get_visible_things('agents', aindex)
 
-    def get_agents_up(self, index):
-        xv, yv = self.get_viewpoint_up(index)
-        agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance)
-        return(len(agents))
+    def get_agents_up(self, aindex):
+        return self.get_things_up('agents', aindex)
 
-    def get_agents_right(self, index):
-        xv, yv = self.get_viewpoint_right(index)
-        agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance)
-        return(len(agents))
+    def get_agents_down(self, aindex):
+        return self.get_things_down('agents', aindex)
 
-    def get_agents_down(self, index):
-        xv, yv = self.get_viewpoint_down(index)
-        agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance)
-        return(len(agents))
+    def get_agents_right(self, aindex):
+        return self.get_things_right('agents', aindex)
 
-    def get_agents_left(self, index):
-        xv, yv = self.get_viewpoint_left(index)
-        agents = self.get_agents_in_radius(xv, yv, self.agent_view_distance)
-        return(len(agents))
+    def get_agents_left(self, aindex):
+        return self.get_things_left('agents', aindex)
 
-    def get_adjacent_agent_indices(self, index):
-        xpos = self.agents[index].xpos
-        ypos = self.agents[index].ypos
-        return self.get_agents_in_radius(xpos, ypos, self.agent_view_distance)
+    def get_adjacent_agent_indices(self, aindex):
+        return self.get_adjacent_agent_indices('agents', aindex)
 
-    def get_adjacent_agent_count(self, index):
-        xpos = self.agents[index].xpos
-        ypos = self.agents[index].ypos
-        agents = self.get_agents_in_radius(xpos, ypos, self.agent_view_distance)
-        agent_count = len(agents)
-        return agent_count
+    def get_adjacent_agent_count(self, aindex):
+        return self.get_adjacent_thing_count('agents', aindex)
 
-    def get_nearest_agent(self, index):
-        xpos = self.agents[index].xpos
-        ypos = self.agents[index].ypos
-        distances = []
-        for i in range(len(self.agents)):
-            ax = self.agents[i].xpos
-            ay = self.agents[i].ypos
-            radius = self.agent_view_distance
-            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
-                distances.append(self.distance(xpos, ypos, ax, ay))
-        if len(distances) > 1:
-            shortest_index = np.argsort(distances, axis=0)[1]
-            shortest_value = distances[shortest_index]
-            return shortest_index, shortest_value
-        else:
-            return None, None
+    def get_nearest_agent(self, aindex):
+        return self.get_nearest_thing('agents', aindex)
 
     def evaluate_learner(self, index):
-        if len(self.agents[index].previous_stats) >= self.evaluate_learner_every:
-            mpf = np.mean([x[self.fitness_index] for x in self.agents[index].previous_stats])
+        if len(self.things['agents'][index].previous_stats) >= self.evaluate_learner_every:
+            mpf = np.mean([x[self.fitness_index] for x in self.things['agents'][index].previous_stats])
             pfm = 0
             method = 0
             if random.random() < self.rebirth_genome_store:
@@ -901,7 +995,7 @@ class game_space:
             else:
                 if len(self.previous_agents) > 1:
                     pfm = np.mean([x[self.fitness_index] for x in self.previous_agents])
-            self.agents[index].previous_stats = []
+            self.things['agents'][index].previous_stats = []
             if pfm > 0:
                 if mpf < pfm * 0.75:
                     g = None
@@ -912,85 +1006,82 @@ class game_space:
                         num_g = min(len(self.previous_agents), int(self.num_previous_agents * self.top_n))
                         g = random.choice(self.get_best_previous_genomes(num_g, None))
                     if g is not None and len(g) == self.genome_size:
-                        self.agents[index].set_genome(g)
+                        self.things['agents'][index].set_genome(g)
                         self.rebirths += 1
                 else:
                     self.continuations += 1
 
-    def reset_agents(self, reset):
-        for index in reset:
-            l = int(self.agents[index].learnable)
-            ae = self.entropy(self.agents[index].previous_actions)
-            a = self.agents[index].age
-            h = self.agents[index].happiness + ae*100
-            d = self.agents[index].distance_travelled
+    def store_agent_entry(self, index):
+            l = int(self.things['agents'][index].learnable)
+            ae = self.entropy(self.things['agents'][index].previous_actions)
+            a = self.things['agents'][index].age
+            h = self.things['agents'][index].happiness + ae*100
+            d = self.things['agents'][index].distance_travelled
             f = a + h + d
-            g = self.agents[index].model.get_w()
+            g = self.things['agents'][index].model.get_w()
             entry = [g, f, a, h, d, l]
             self.store_genome(entry)
             self.add_previous_agent(entry)
-            if len(self.agents[index].model.rewards) > 0:
+            return entry
+
+    def reset_agents(self, reset):
+        for index in reset:
+            entry = self.store_agent_entry(index)
+            ae = self.entropy(self.things['agents'][index].previous_actions)
+            a = self.things['agents'][index].age
+            if len(self.things['agents'][index].model.rewards) > 0:
                 reward = ((a-self.agent_start_energy)/self.agent_start_energy) + (ae*0.1)
-                reward += self.agents[index].model.rewards[-1]
+                reward += self.things['agents'][index].model.rewards[-1]
                 reward = np.float32(reward)
-                self.agents[index].model.rewards[-1] = reward
-            self.agents[index].previous_stats.append(entry)
+                self.things['agents'][index].model.rewards[-1] = reward
+            self.things['agents'][index].previous_stats.append(entry)
             self.deaths += 1
             self.resets += 1
-            self.agents[index].model.finish_episode()
-            self.agents[index].reset()
+            self.things['agents'][index].model.finish_episode()
+            self.things['agents'][index].reset()
             xpos, ypos = self.get_safe_spawn_location()
-            self.agents[index].xpos = xpos
-            self.agents[index].ypos = ypos
+            self.things['agents'][index].xpos = xpos
+            self.things['agents'][index].ypos = ypos
             self.set_initial_agent_state(index)
             self.evaluate_learner(index)
 
     def kill_agents(self, dead):
         for index in dead:
-            l = int(self.agents[index].learnable)
-            ae = self.entropy(self.agents[index].previous_actions) * 0.1
-            a = self.agents[index].age
-            h = self.agents[index].happiness
-            d = self.agents[index].distance_travelled
-            f = a + h + d
-            g = self.agents[index].model.get_w()
-            entry = [g, f, a, h, d, l]
+            entry = self.store_agent_entry(index)
             self.deaths += 1
-            self.store_genome(entry)
-            self.add_previous_agent(entry)
-            self.agents[index].reset()
-            xpos, ypos = self.get_safe_spawn_location()
-            self.agents[index].xpos = xpos
-            self.agents[index].ypos = ypos
-            genome = self.make_new_genome(0)
-            self.agents[index].set_genome(g)
-            self.set_initial_agent_state(index)
             self.spawns += 1
+            self.things['agents'][index].reset()
+            xpos, ypos = self.get_safe_spawn_location()
+            self.things['agents'][index].xpos = xpos
+            self.things['agents'][index].ypos = ypos
+            genome = self.make_new_genome(0)
+            self.things['agents'][index].set_genome(genome)
+            self.set_initial_agent_state(index)
 
     def update_agent_status(self):
         dead = set()
         reset = set()
-        for index in range(len(self.agents)):
-            self.agents[index].age += 1
-            xpos = self.agents[index].xpos
-            ypos = self.agents[index].ypos
+        for index in range(len(self.things['agents'])):
+            self.things['agents'][index].age += 1
+            xpos = self.things['agents'][index].xpos
+            ypos = self.things['agents'][index].ypos
             if self.num_food > 0:
                 nearby_food = self.get_food_in_radius(xpos, ypos, 1)
                 if len(nearby_food) > 0:
                     fi = random.choice(nearby_food)
                     self.respawn_food(fi)
-                    self.agents[index].energy += 50
-                    self.agents[index].happiness += 10
+                    self.things['agents'][index].energy += 50
+                    self.things['agents'][index].happiness += 10
                     # Reward learning agents for eating food
-                    if len(self.agents[index].model.rewards) > 0:
-                        self.agents[index].model.rewards[-1] = np.float32(1.0)
+                    if len(self.things['agents'][index].model.rewards) > 0:
+                        self.things['agents'][index].model.rewards[-1] = np.float32(1.0)
             energy_drain = self.agent_energy_drain
             protectors = self.get_protectors_in_radius(xpos, ypos, self.protector_safe_distance)
             if len(protectors) > 0:
                 energy_drain = -1
-            self.agents[index].energy -= energy_drain
-            if self.agents[index].energy <= 0:
-                if self.agents[index].learnable == False:
+            self.things['agents'][index].energy -= energy_drain
+            if self.things['agents'][index].energy <= 0:
+                if self.things['agents'][index].learnable == False:
                     dead.add(index)
                 else:
                     reset.add(index)
@@ -1000,129 +1091,102 @@ class game_space:
             self.kill_agents(dead)
 
     def update_agent_position(self, index):
-        x1 = self.agents[index].xpos
-        y1 = self.agents[index].ypos
-        o = self.agents[index].orient
-        e = self.agents[index].energy
-        x2 = x1 + self.agents[index].xvel
-        y2 = y1 + self.agents[index].yvel
+        x1 = self.things['agents'][index].xpos
+        y1 = self.things['agents'][index].ypos
+        o = self.things['agents'][index].orient
+        e = self.things['agents'][index].energy
+        x2 = x1 + self.things['agents'][index].xvel
+        y2 = y1 + self.things['agents'][index].yvel
         d = self.distance(x1, y1, x2, y2)
-        self.agents[index].distance_travelled += d
+        self.things['agents'][index].distance_travelled += d
         nx, ny = self.update_position(x2, y2)
-        self.agents[index].xpos = nx
-        self.agents[index].ypos = ny
-        self.agents[index].previous_positions.popleft()
-        self.agents[index].previous_positions.append([x2, y2, o, e])
+        self.things['agents'][index].xpos = nx
+        self.things['agents'][index].ypos = ny
+        self.things['agents'][index].previous_positions.popleft()
+        self.things['agents'][index].previous_positions.append([x2, y2, o, e])
 
     def apply_agent_physics(self):
-        for index in range(len(self.agents)):
-            self.apply_agent_inertial_damping(index)
-
-    def apply_agent_inertial_damping(self, index):
-        self.agents[index].xvel = self.agents[index].xvel * self.agents[index].inertial_damping
-        self.agents[index].yvel = self.agents[index].yvel * self.agents[index].inertial_damping
+        self.apply_physics('agents')
 
 # Agent actions
     def apply_agent_action(self, index, action):
-        self.agents[index].prev_action = action
+        self.things['agents'][index].prev_action = action
         agent_function = "action_" + self.actions[action]
         class_method = getattr(self, agent_function)
-        if self.agents[index].xvel == 0 and self.agents[index].yvel == 0:
-            self.agents[index].happiness -= 1
+        if self.things['agents'][index].xvel == 0 and self.things['agents'][index].yvel == 0:
+            self.things['agents'][index].happiness -= 1
         reward = class_method(index)
-        if self.agents[index].learnable == True:
-            self.agents[index].model.record_reward(reward)
+        if self.things['agents'][index].learnable == True:
+            self.things['agents'][index].model.record_reward(reward)
 
     def action_null(self, index):
         return 0
 
     def action_rotate_right(self, index):
-        self.agents[index].orient += 1
-        if self.agents[index].orient > 7:
-            self.agents[index].orient = 0
-        return 0
+        return self.rotate_right('agents', index)
 
     def action_rotate_left(self, index):
-        self.agents[index].orient -= 1
-        if self.agents[index].orient < 0:
-            self.agents[index].orient = 7
-        return 0
+        return self.rotate_left('agents', index)
 
     def action_flip(self, index):
-        self.agents[index].orient += 4
-        if self.agents[index].orient > 7:
-            self.agents[index].orient -= 7
-        return 0
+        return self.flip_thing('agents', index)
 
     def action_propel(self, index):
-        orient = self.agents[index].orient
-        speed = self.agents[index].speed
-        xvel = self.agents[index].xvel
-        yvel = self.agents[index].yvel
-        xv, yv = self.propel(xvel, yvel, orient, speed)
-        self.agents[index].xvel = xv
-        self.agents[index].yvel = yv
-        return 0
+        return propel_thing(self, ttype, index)
 
     def propel_agent_in_direction(self, index, direction):
-        speed = self.agents[index].speed
-        xvel = self.agents[index].xvel
-        yvel = self.agents[index].yvel
-        xv, yv = self.propel(xvel, yvel, direction, speed)
-        self.agents[index].xvel = xv
-        self.agents[index].yvel = yv
-        return 0
+        return self.propel_thing_in_direction('agents', index, direction)
 
     def action_propel_up(self, index):
-        return self.propel_agent_in_direction(index, 0)
+        return self.propel_thing_up('agents', index)
 
     def action_propel_right(self, index):
-        return self.propel_agent_in_direction(index, 2)
+        return self.propel_thing_right('agents', index)
 
     def action_propel_down(self, index):
-        return self.propel_agent_in_direction(index, 4)
+        return self.propel_thing_down('agents', index)
 
     def action_propel_left(self, index):
-        return self.propel_agent_in_direction(index, 6)
+        return self.propel_thing_left('agents', index)
 
 # Agent observations
     def make_new_state(self, index):
         state = []
-        xpos = self.agents[index].xpos
-        ypos = self.agents[index].ypos
+        xpos = self.things['agents'][index].xpos
+        ypos = self.things['agents'][index].ypos
         nearby = self.get_agents_in_radius(xpos, ypos, self.agent_view_distance)
         if len(nearby) > 0:
             for ai in nearby:
-                ax = self.agents[ai].xpos
-                ay = self.agents[ai].ypos
+                ax = self.things['agents'][ai].xpos
+                ay = self.things['agents'][ai].ypos
                 angle = math.atan2(ay-ypos, ax-xpos)
                 distance = self.distance(xpos, ypos, ax, ay)
                 state.append([1, distance, angle])
         nearby = self.get_predators_in_radius(xpos, ypos, self.agent_view_distance)
         if len(nearby) > 0:
             for ai in nearby:
-                ax = self.predators[ai].xpos
-                ay = self.predators[ai].ypos
+                ax = self.things['predators'][ai].xpos
+                ay = self.things['predators'][ai].ypos
                 angle = math.atan2(ay-ypos, ax-xpos)
                 distance = self.distance(xpos, ypos, ax, ay)
                 state.append([2, distance, angle])
         nearby = self.get_protectors_in_radius(xpos, ypos, self.agent_view_distance)
         if len(nearby) > 0:
             for ai in nearby:
-                ax = self.protectors[ai].xpos
-                ay = self.protectors[ai].ypos
+                ax = self.things['protectors'][ai].xpos
+                ay = self.things['protectors'][ai].ypos
                 angle = math.atan2(ay-ypos, ax-xpos)
                 distance = self.distance(xpos, ypos, ax, ay)
                 state.append([3, distance, angle])
         return state
 
     def make_new_states(self):
-        for index in range(len(self.agents)):
+        for index in range(len(self.things['agents'])):
             new_state = self.make_new_state(index)
-            self.agents[index].new_state = new_state
+            self.things['agents'][index].new_state = new_state
 
     def set_agent_states(self):
-        for n in range(len(self.agents)):
+        for n in range(len(self.things['agents'])):
             self.set_agent_state(n)
 
     def set_initial_agent_state(self, index):
@@ -1130,17 +1194,17 @@ class game_space:
         for _ in range(self.num_prev_states):
             entry = np.zeros(len(self.observations))
             prev_states.append(entry)
-        self.agents[index].previous_states = deque(prev_states)
+        self.things['agents'][index].previous_states = deque(prev_states)
 
     def set_agent_state(self, index):
-        self.agents[index].previous_states.popleft()
+        self.things['agents'][index].previous_states.popleft()
         current_observations = self.get_agent_observations(index)
-        self.agents[index].previous_states.append(current_observations)
-        all_states = self.agents[index].previous_states
+        self.things['agents'][index].previous_states.append(current_observations)
+        all_states = self.things['agents'][index].previous_states
         state = np.ravel(all_states)
         state = torch.FloatTensor(state)
         state = state.unsqueeze(0)
-        self.agents[index].state = state
+        self.things['agents'][index].state = state
 
     def get_agent_observations(self, index):
         function_names = []
@@ -1155,33 +1219,33 @@ class game_space:
         return observations
 
     def get_own_energy(self, index):
-        return self.agents[index].energy/self.agent_start_energy
+        return self.things['agents'][index].energy/self.agent_start_energy
 
 ###################
 # Protector actions
 ###################
     def set_protector_entity(self, index):
-        xabs = self.protectors[index].xpos
-        yabs = self.protectors[index].ypos
-        zabs = self.protectors[index].zpos
+        xabs = self.things['protectors'][index].xpos
+        yabs = self.things['protectors'][index].ypos
+        zabs = self.things['protectors'][index].zpos
         s = self.protector_safe_distance*2
         texture = "textures/white"
-        self.protectors[index].entity = Entity(model='sphere',
+        self.things['protectors'][index].entity = Entity(model='sphere',
                                               color=color.white,
                                               scale=(2,2,2),
                                               position = (xabs, yabs, zabs),
                                               texture=texture)
-        self.protectors[index].protection_entity = Entity(model='sphere',
+        self.things['protectors'][index].protection_entity = Entity(model='sphere',
                                                           color=color.rgba(0,102,0,50),
                                                           scale=(s,s,s),
                                                           position = (xabs, yabs, zabs))
-        self.protectors[index].pulse_entity = Entity(model='sphere',
+        self.things['protectors'][index].pulse_entity = Entity(model='sphere',
                                                      color=color.rgba(0,102,0,30),
                                                      scale=(s,s,s),
                                                      position = (xabs, yabs, zabs))
 
     def create_protectors(self):
-        self.protectors = []
+        self.things['protectors'] = []
         for n in range(self.num_protectors):
             self.spawn_random_protector()
 
@@ -1191,115 +1255,57 @@ class game_space:
         a = Protector(xpos,
                      ypos,
                      zpos)
-        self.protectors.append(a)
-        index = len(self.protectors)-1
+        self.things['protectors'].append(a)
+        index = len(self.things['protectors'])-1
         if self.visuals == True:
             self.set_protector_entity(index)
 
-    def get_protector_in_range(self, index):
-        xpos = self.agents[index].xpos
-        ypos = self.agents[index].ypos
-        p = self.get_protectors_in_radius(xpos, ypos, self.protector_safe_distance)
-        if len(p) > 0:
-            return 1
-        return 0
+    def get_protector_in_range(self, aindex):
+        xpos = self.things['agents'][aindex].xpos
+        ypos = self.things['agents'][aindex].ypos
+        i = self.get_things_in_radius('protectors', xpos, ypos, self.protector_safe_distance)
+        n = len(i)
+        if n > 1:
+            n = 1
+        return n
 
     def get_protectors_in_radius(self, xpos, ypos, radius):
-        ret = []
-        for i in range(len(self.protectors)):
-            ax = self.protectors[i].xpos
-            ay = self.protectors[i].ypos
-            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
-                if self.distance(xpos, ypos, ax, ay) <= radius:
-                    ret.append(i)
-        return ret
+        return self.get_things_in_radius('protectors', xpos, ypos, radius)
 
-    def get_surrounding_protectors(self, index):
-        xv = self.agents[index].xpos
-        yv = self.agents[index].ypos
-        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance)
-        protector_count = len(protectors)
-        return protector_count
+    def get_visible_protectors(self, aindex):
+        return self.get_visible_things('protectors', aindex)
 
-    def get_visible_protectors(self, index):
-        xv, yv = self.get_viewpoint(index)
-        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance*2)
-        protector_count = len(protectors)
-        return protector_count
+    def get_protectors_up(self, aindex):
+        return self.get_things_up('protectors', aindex)
 
-    def get_protectors_up(self, index):
-        xv, yv = self.get_viewpoint_up(index)
-        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance)
-        protector_count = len(protectors)
-        return protector_count
+    def get_protectors_right(self, aindex):
+        return self.get_things_right('protectors', aindex)
 
-    def get_protectors_right(self, index):
-        xv, yv = self.get_viewpoint_right(index)
-        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance)
-        protector_count = len(protectors)
-        return protector_count
+    def get_protectors_down(self, aindex):
+        return self.get_things_down('protectors', aindex)
 
-    def get_protectors_down(self, index):
-        xv, yv = self.get_viewpoint_down(index)
-        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance)
-        protector_count = len(protectors)
-        return protector_count
-
-    def get_protectors_left(self, index):
-        xv, yv = self.get_viewpoint_left(index)
-        protectors = self.get_protectors_in_radius(xv, yv, self.agent_view_distance)
-        protector_count = len(protectors)
-        return protector_count
+    def get_protectors_left(self, aindex):
+        return self.get_things_left('protectors', aindex)
 
     def protector_move_random(self, index):
         action = random.choice([0,1,1,1,2,3])
         if action == 0:
             pass
         elif action == 1:
-            self.protector_propel(index)
+            self.propel_thing('protectors', index)
         elif action == 2:
-            self.protector_rotate_right(index)
+            self.rotate_right('protectors', index)
         else:
-            self.protector_rotate_left(index)
-
-    def protector_propel(self, index):
-        orient = self.protectors[index].orient
-        speed = self.protectors[index].speed
-        xvel = self.protectors[index].xvel
-        yvel = self.protectors[index].yvel
-        xv, yv = self.propel(xvel, yvel, orient, speed)
-        self.protectors[index].xvel = xv
-        self.protectors[index].yvel = yv
-
-    def protector_rotate_right(self, index):
-        self.protectors[index].orient += 1
-        if self.protectors[index].orient > 7:
-            self.protectors[index].orient = 0
-
-    def protector_rotate_left(self, index):
-        self.protectors[index].orient -= 1
-        if self.protectors[index].orient < 0:
-            self.protectors[index].orient = 7
+            self.rotate_left('protectors', index)
 
     def apply_protector_physics(self):
-        for index in range(len(self.protectors)):
-            self.apply_protector_inertial_damping(index)
-
-    def apply_protector_inertial_damping(self, index):
-        self.protectors[index].xvel = self.protectors[index].xvel * self.protectors[index].inertial_damping
-        self.protectors[index].yvel = self.protectors[index].yvel * self.protectors[index].inertial_damping
+        return self.apply_physics('protectors')
 
     def update_protector_position(self, index):
-        xpos = self.protectors[index].xpos 
-        xpos += self.protectors[index].xvel
-        ypos = self.protectors[index].ypos
-        ypos += self.protectors[index].yvel
-        xpos, ypos = self.update_position(xpos, ypos)
-        self.protectors[index].xpos = xpos
-        self.protectors[index].ypos = ypos
+        return self.update_thing_position('protectors', index)
 
     def run_protector_actions(self):
-        for index in range(len(self.protectors)):
+        for index in range(len(self.things['protectors'])):
             self.protector_move_random(index)
             self.update_protector_position(index)
 
@@ -1307,12 +1313,12 @@ class game_space:
 # Predator actions
 ##################
     def set_predator_entity(self, index):
-        xabs = self.predators[index].xpos
-        yabs = self.predators[index].ypos
-        zabs = self.predators[index].zpos
+        xabs = self.things['predators'][index].xpos
+        yabs = self.things['predators'][index].ypos
+        zabs = self.things['predators'][index].zpos
         s = self.predator_kill_distance
         texture = "textures/red"
-        self.predators[index].entity = Entity(model='sphere',
+        self.things['predators'][index].entity = Entity(model='sphere',
                                               color=color.white,
                                               scale=(s,s,s),
                                               position = (xabs, yabs, zabs),
@@ -1325,112 +1331,53 @@ class game_space:
         a = Predator(xpos,
                      ypos,
                      zpos)
-        self.predators.append(a)
-        index = len(self.predators)-1
+        self.things['predators'].append(a)
+        index = len(self.things['predators'])-1
         if self.visuals == True:
             self.set_predator_entity(index)
 
     def create_predators(self):
-        self.predators = []
+        self.things['predators'] = []
         for n in range(self.num_predators):
             self.spawn_random_predator()
 
     def get_predators_in_radius(self, xpos, ypos, radius):
-        ret = []
-        for i in range(len(self.predators)):
-            ax = self.predators[i].xpos
-            ay = self.predators[i].ypos
-            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
-                if self.distance(xpos, ypos, ax, ay) <= radius:
-                    ret.append(i)
-        return ret
+        return self.get_things_in_radius('predators', xpos, ypos, radius)
 
-    def get_surrounding_predators(self, index):
-        xv = self.agents[index].xpos
-        yv = self.agents[index].ypos
-        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
-        predator_count = len(predators)
-        return predator_count
+    def get_visible_predators(self, aindex):
+        return self.get_visible_things('predators', aindex)
 
-    def get_visible_predators(self, index):
-        xv, yv = self.get_viewpoint(index)
-        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance*2)
-        predator_count = len(predators)
-        return predator_count
+    def get_predators_up(self, aindex):
+        return self.get_things_up('predators', aindex)
 
-    def get_predators_up(self, index):
-        xv, yv = self.get_viewpoint_up(index)
-        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
-        predator_count = len(predators)
-        return predator_count
+    def get_predators_right(self, aindex):
+        return self.get_things_right('predators', aindex)
 
-    def get_predators_right(self, index):
-        xv, yv = self.get_viewpoint_right(index)
-        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
-        predator_count = len(predators)
-        return predator_count
+    def get_predators_down(self, aindex):
+        return self.get_things_down('predators', aindex)
 
-    def get_predators_down(self, index):
-        xv, yv = self.get_viewpoint_down(index)
-        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
-        predator_count = len(predators)
-        return predator_count
-
-    def get_predators_left(self, index):
-        xv, yv = self.get_viewpoint_left(index)
-        predators = self.get_predators_in_radius(xv, yv, self.agent_view_distance)
-        predator_count = len(predators)
-        return predator_count
+    def get_predators_left(self, aindex):
+        return self.get_things_left('predators', aindex)
 
     def predator_move_random(self, index):
         action = random.choice([0,1,2])
         if action == 0:
-            self.predator_propel(index)
+            self.propel_thing('predators', index)
         elif action == 1:
-            self.predator_rotate_right(index)
+            self.rotate_right('predators', index)
         else:
-            self.predator_rotate_left(index)
-
-    def predator_propel(self, index):
-        orient = self.predators[index].orient
-        speed = self.predators[index].speed
-        xvel = self.predators[index].xvel
-        yvel = self.predators[index].yvel
-        xv, yv = self.propel(xvel, yvel, orient, speed)
-        self.predators[index].xvel = xv
-        self.predators[index].yvel = yv
-
-    def predator_rotate_right(self, index):
-        self.predators[index].orient += 1
-        if self.predators[index].orient > 7:
-            self.predators[index].orient = 0
-
-    def predator_rotate_left(self, index):
-        self.predators[index].orient -= 1
-        if self.predators[index].orient < 0:
-            self.predators[index].orient = 7
+            self.rotate_left('predators', index)
 
     def apply_predator_physics(self):
-        for index in range(len(self.predators)):
-            self.apply_predator_inertial_damping(index)
-
-    def apply_predator_inertial_damping(self, index):
-        self.predators[index].xvel = self.predators[index].xvel * self.predators[index].inertial_damping
-        self.predators[index].yvel = self.predators[index].yvel * self.predators[index].inertial_damping
+        return self.apply_physics('predators')
 
     def update_predator_position(self, index):
-        xpos = self.predators[index].xpos 
-        xpos += self.predators[index].xvel
-        ypos = self.predators[index].ypos
-        ypos += self.predators[index].yvel
-        xpos, ypos = self.update_position(xpos, ypos)
-        self.predators[index].xpos = xpos
-        self.predators[index].ypos = ypos
+        return self.update_thing_position('predators', index)
 
     def run_predator_actions(self):
-        for index in range(len(self.predators)):
-            xpos = self.predators[index].xpos
-            ypos = self.predators[index].ypos
+        for index in range(len(self.things['predators'])):
+            xpos = self.things['predators'][index].xpos
+            ypos = self.things['predators'][index].ypos
             radius = self.predator_kill_distance
             # If agents near enough to predator, kill them
             victims = self.get_agents_in_radius(xpos, ypos, radius)
@@ -1440,7 +1387,7 @@ class game_space:
                 self.eaten += len(victims)
                 try:
                     for v in victims:
-                        if self.agents[v].learnable == True:
+                        if self.things['agents'][v].learnable == True:
                             reset.append(v)
                         else:
                             dead.append(v)
@@ -1458,15 +1405,15 @@ class game_space:
             # Note predators can still eat agents in this state
             p = self.get_protectors_in_radius(xpos, ypos, self.protector_safe_distance)
             if len(p) > 0:
-                self.apply_predator_inertial_damping(index)
+                self.apply_inertial_damping('predators', index)
             else:
-                orient = self.predators[index].orient
+                orient = self.things['predators'][index].orient
                 distance = self.predator_view_distance
                 xv, yv = self.viewpoint(xpos, ypos, orient, distance)
                 # If agents in viewfield, move forward
                 targets = self.get_agents_in_radius(xv, yv, distance)
                 if len(targets) > 0:
-                    self.predator_propel(index)
+                    self.propel_thing('predators', index)
                 else:
                     self.predator_move_random(index)
             self.update_predator_position(index)
@@ -1477,7 +1424,7 @@ class game_space:
     def spawn_zones(self):
         if self.use_zones == False:
             return
-        self.zones = []
+        self.things['zones'] = []
         for vals in self.zone_config:
             ztype, xpos, ypos, radius, strength = vals
             self.spawn_zone(xpos, ypos, ztype, radius, strength)
@@ -1485,40 +1432,33 @@ class game_space:
     def spawn_zone(self, xpos, ypos, ztype, radius, strength):
         zpos = -1
         zone = Zone(xpos, ypos, zpos, ztype, radius, strength)
-        self.zones.append(zone)
-        index = len(self.zones)-1
+        self.things['zones'].append(zone)
+        index = len(self.things['zones'])-1
         if self.visuals == True:
             self.set_zone_entity(index)
 
     def get_zones_in_radius(self, xpos, ypos, radius):
-        ret = []
-        for i in range(len(self.zones)):
-            ax = self.zones[i].xpos
-            ay = self.zones[i].ypos
-            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
-                if self.distance(xpos, ypos, ax, ay) <= radius:
-                    ret.append(i)
-        return ret
+        return self.get_things_in_radius('zones', xpos, ypos, radius)
 
     def apply_zone_effects(self):
         if self.use_zones == False:
             return
-        for index in range(len(self.zones)):
-            xpos = self.zones[index].xpos
-            ypos = self.zones[index].ypos
-            radius = self.zones[index].radius
-            strength = self.zones[index].strength
-            ztype = self.zones[index].ztype
+        for index in range(len(self.things['zones'])):
+            xpos = self.things['zones'][index].xpos
+            ypos = self.things['zones'][index].ypos
+            radius = self.things['zones'][index].radius
+            strength = self.things['zones'][index].strength
+            ztype = self.things['zones'][index].ztype
             affected = self.get_agents_in_radius(xpos, ypos, radius)
             if len(affected) > 0:
                 for ai in affected:
-                    ax = self.agents[ai].xpos
-                    ay = self.agents[ai].ypos
+                    ax = self.things['agents'][ai].xpos
+                    ay = self.things['agents'][ai].ypos
                     angle = math.atan2(ay-ypos, ax-xpos)
                     xc = math.cos(angle)
                     yc = math.sin(angle)
-                    axv = self.agents[index].xvel
-                    ayv = self.agents[index].yvel
+                    axv = self.things['agents'][index].xvel
+                    ayv = self.things['agents'][index].yvel
                     naxv = axv
                     nayv = ayv
                     if ztype == "acceleration":
@@ -1533,23 +1473,23 @@ class game_space:
                     elif ztype == "attractor":
                         naxv = axv - (xc * strength)
                         nayv = ayv - (yc * strength)
-                    self.agents[ai].xvel = naxv
-                    self.agents[ai].yvel = nayv
+                    self.things['agents'][ai].xvel = naxv
+                    self.things['agents'][ai].yvel = nayv
 
     def set_zone_entity(self, index):
-        xabs = self.zones[index].xpos
-        yabs = self.zones[index].ypos
-        zabs = self.zones[index].zpos
-        ztype = self.zones[index].ztype
-        s = self.zones[index].radius * 2
-        c = self.zones[index].zone_colors[ztype]
-        alpha = self.zones[index].strength*150
+        xabs = self.things['zones'][index].xpos
+        yabs = self.things['zones'][index].ypos
+        zabs = self.things['zones'][index].zpos
+        ztype = self.things['zones'][index].ztype
+        s = self.things['zones'][index].radius * 2
+        c = self.things['zones'][index].zone_colors[ztype]
+        alpha = self.things['zones'][index].strength*150
         c.append(alpha)
-        self.zones[index].entity = Entity(model='sphere',
+        self.things['zones'][index].entity = Entity(model='sphere',
                                           color=color.rgba(*c),
                                           scale=(s,s,s),
                                           position = (xabs, yabs, zabs))
-        self.zones[index].radius_entity = Entity(model='sphere',
+        self.things['zones'][index].radius_entity = Entity(model='sphere',
                                                  color=color.rgba(*c),
                                                  scale=(s,s,s),
                                                  position = (xabs, yabs, zabs))
@@ -1560,79 +1500,50 @@ class game_space:
     def spawn_food(self):
         if self.num_food < 1:
             return
-        self.food = []
+        self.things['food'] = []
         for index in range(self.num_food):
             xpos = random.random()*self.area_size
             ypos = random.random()*self.area_size
             zpos = -1
             food = Food(xpos, ypos, zpos)
-            self.food.append(food)
+            self.things['food'].append(food)
             if self.visuals == True:
                 self.set_food_entity(index)
 
     def respawn_food(self, index):
         xpos = random.random()*self.area_size
         ypos = random.random()*self.area_size
-        self.food[index].xpos = xpos
-        self.food[index].ypos = ypos
+        self.things['food'][index].xpos = xpos
+        self.things['food'][index].ypos = ypos
         zpos = -1
         if self.visuals == True:
-            self.food[index].entity.position=(xpos, ypos, zpos)
+            self.things['food'][index].entity.position=(xpos, ypos, zpos)
 
     def get_food_in_radius(self, xpos, ypos, radius):
-        ret = []
-        for i in range(len(self.food)):
-            ax = self.food[i].xpos
-            ay = self.food[i].ypos
-            if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
-                if self.distance(xpos, ypos, ax, ay) <= radius:
-                    ret.append(i)
-        return ret
+        return self.get_things_in_radius('food', xpos, ypos, radius)
 
-    def get_surrounding_food(self, index):
-        xv = self.agents[index].xpos
-        yv = self.agents[index].ypos
-        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
-        food_count = len(food)
-        return food_count
+    def get_visible_food(self, aindex):
+        return self.get_visible_things('food', aindex)
 
-    def get_visible_food(self, index):
-        xv, yv = self.get_viewpoint(index)
-        food = self.get_food_in_radius(xv, yv, self.agent_view_distance*2)
-        food_count = len(food)
-        return food_count
+    def get_food_up(self, aindex):
+        return self.get_things_up('food', aindex)
 
-    def get_food_up(self, index):
-        xv, yv = self.get_viewpoint_up(index)
-        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
-        food_count = len(food)
-        return food_count
+    def get_food_right(self, aindex):
+        return self.get_things_right('food', aindex)
 
-    def get_food_right(self, index):
-        xv, yv = self.get_viewpoint_right(index)
-        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
-        food_count = len(food)
-        return food_count
+    def get_food_down(self, aindex):
+        return self.get_things_down('food', aindex)
 
-    def get_food_down(self, index):
-        xv, yv = self.get_viewpoint_down(index)
-        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
-        food_count = len(food)
-        return food_count
-
-    def get_food_left(self, index):
-        xv, yv = self.get_viewpoint_left(index)
-        food = self.get_food_in_radius(xv, yv, self.agent_view_distance)
-        food_count = len(food)
-        return food_count
+    def get_food_left(self, aindex):
+        return self.get_things_left('food', aindex)
 
     def set_food_entity(self, index):
-        xabs = self.food[index].xpos
-        yabs = self.food[index].ypos
-        zabs = self.food[index].zpos
+        xabs = self.things['food'][index].xpos
+        yabs = self.things['food'][index].ypos
+        zabs = self.things['food'][index].zpos
         s = 1
         c = [255, 153, 51, 120]
-        self.food[index].entity = Entity(model='sphere',
+        self.things['food'][index].entity = Entity(model='sphere',
                                          color=color.rgba(*c),
                                          scale=(s,s,s),
                                          position = (xabs, yabs, zabs))
@@ -1998,7 +1909,7 @@ class game_space:
         return msg
 
     def print_new_state_stats(self):
-        new_state_lens = [len(self.agents[x].new_state) for x in range(len(self.agents))]
+        new_state_lens = [len(self.things['agents'][x].new_state) for x in range(len(self.things['agents']))]
         max_nsl = max(new_state_lens) * 3
         mean_nsl = np.mean(new_state_lens) * 3
         msg = ""
@@ -2008,16 +1919,16 @@ class game_space:
         return msg
 
     def get_stats(self):
-        l_agents = sum([x.learnable for x in self.agents])
+        l_agents = sum([x.learnable for x in self.things['agents']])
         self.record_stats("learning agents", l_agents)
-        e_agents = len(self.agents) - l_agents
+        e_agents = len(self.things['agents']) - l_agents
         self.record_stats("evolving agents", l_agents)
 
         msg = ""
         msg += self.print_run_stats()
         msg += "Step: " + str(self.steps)
         msg += "\n"
-        msg += "Agents: " + str(len(self.agents))
+        msg += "Agents: " + str(len(self.things['agents']))
         msg += "  learning: " + str(l_agents)
         msg += "  evolving: " + str(e_agents)
         msg += "\n\n"
@@ -2049,58 +1960,58 @@ def update():
     window.color = color.rgb(0,0,0)
 
     # Update agent positions
-    for index, agent in enumerate(gs.agents):
-        if gs.agents[index].entity is not None:
-            xabs = gs.agents[index].xpos
-            yabs = gs.agents[index].ypos
-            zabs = gs.agents[index].zpos
-            s = 0.5 + ((gs.agents[index].energy/200)*0.5)
-            gs.agents[index].entity.scale = (s,s,s)
-            gs.agents[index].entity.position = (xabs, yabs, zabs)
-            orient = gs.agents[index].orient
-            gs.agents[index].entity.rotation = (45*orient, 90, 0)
-            for n in range(gs.agents[index].trail_length):
-                item = gs.agents[index].previous_positions[n]
+    for index, agent in enumerate(gs.things['agents']):
+        if gs.things['agents'][index].entity is not None:
+            xabs = gs.things['agents'][index].xpos
+            yabs = gs.things['agents'][index].ypos
+            zabs = gs.things['agents'][index].zpos
+            s = 0.5 + ((gs.things['agents'][index].energy/200)*0.5)
+            gs.things['agents'][index].entity.scale = (s,s,s)
+            gs.things['agents'][index].entity.position = (xabs, yabs, zabs)
+            orient = gs.things['agents'][index].orient
+            gs.things['agents'][index].entity.rotation = (45*orient, 90, 0)
+            for n in range(gs.things['agents'][index].trail_length):
+                item = gs.things['agents'][index].previous_positions[n]
                 x, y, o, ss = item
-                ss = 0.5 + ((gs.agents[index].energy/200)*0.5)
-                gs.agents[index].trail_entities[n].position = (x, y, zabs)
-                gs.agents[index].trail_entities[n].rotation = (45*o, 90, 0)
-                gs.agents[index].trail_entities[n].scale = (ss, ss, ss)
+                ss = 0.5 + ((gs.things['agents'][index].energy/1000)*0.5)
+                gs.things['agents'][index].trail_entities[n].position = (x, y, zabs)
+                gs.things['agents'][index].trail_entities[n].rotation = (45*o, 90, 0)
+                gs.things['agents'][index].trail_entities[n].scale = (ss, ss, ss)
 
     # Update predator positions
-    for index, predator in enumerate(gs.predators):
-        if gs.predators[index].entity is not None:
-            xabs = gs.predators[index].xpos
-            yabs = gs.predators[index].ypos
-            zabs = gs.predators[index].zpos
-            gs.predators[index].entity.position = (xabs, yabs, zabs)
-            orient = gs.predators[index].orient
-            gs.predators[index].entity.rotation = (45*orient, 90, 0)
+    for index, predator in enumerate(gs.things['predators']):
+        if gs.things['predators'][index].entity is not None:
+            xabs = gs.things['predators'][index].xpos
+            yabs = gs.things['predators'][index].ypos
+            zabs = gs.things['predators'][index].zpos
+            gs.things['predators'][index].entity.position = (xabs, yabs, zabs)
+            orient = gs.things['predators'][index].orient
+            gs.things['predators'][index].entity.rotation = (45*orient, 90, 0)
 
     # Update protector positions
-    for index, protector in enumerate(gs.protectors):
-        if gs.protectors[index].entity is not None:
-            xabs = gs.protectors[index].xpos
-            yabs = gs.protectors[index].ypos
-            zabs = gs.protectors[index].zpos
-            gs.protectors[index].entity.position = (xabs, yabs, zabs)
-            gs.protectors[index].protection_entity.position = (xabs, yabs, zabs)
-            gs.protectors[index].pulse_entity.position = (xabs, yabs, zabs)
+    for index, protector in enumerate(gs.things['protectors']):
+        if gs.things['protectors'][index].entity is not None:
+            xabs = gs.things['protectors'][index].xpos
+            yabs = gs.things['protectors'][index].ypos
+            zabs = gs.things['protectors'][index].zpos
+            gs.things['protectors'][index].entity.position = (xabs, yabs, zabs)
+            gs.things['protectors'][index].protection_entity.position = (xabs, yabs, zabs)
+            gs.things['protectors'][index].pulse_entity.position = (xabs, yabs, zabs)
             if gs.pulse_zones == True:
                 pes = abs(np.sin(gs.steps/10))*(gs.protector_safe_distance*2)
-                gs.protectors[index].pulse_entity.scale = (pes, pes, pes)
-            orient = gs.protectors[index].orient
-            gs.protectors[index].entity.rotation = (45*orient, 90, 0)
+                gs.things['protectors'][index].pulse_entity.scale = (pes, pes, pes)
+            orient = gs.things['protectors'][index].orient
+            gs.things['protectors'][index].entity.rotation = (45*orient, 90, 0)
 
     if gs.pulse_zones == True:
-        for index, zone in enumerate(gs.zones):
-            radius = gs.zones[index].radius
+        for index, zone in enumerate(gs.things['zones']):
+            radius = gs.things['zones'][index].radius
             pes = abs(np.sin(gs.steps/10))*(radius*2)
-            gs.zones[index].radius_entity.scale = (pes, pes, pes)
+            gs.things['zones'][index].radius_entity.scale = (pes, pes, pes)
 
 
 # Train the game
-random.seed(1337)
+#random.seed(1337)
 
 print_visuals = False
 
@@ -2146,7 +2057,8 @@ else:
 # - edges need to be an input to models
 #
 # implement num_prev_states into current architecture
-
+#
+# Record weighs of top_n in genome store after each reset or respawn
 
 
 
