@@ -372,18 +372,18 @@ class game_space:
                  num_agents=10,
                  agent_start_energy=50,
                  agent_energy_drain=1,
-                 agent_view_distance=5,
+                 agent_view_distance=3,
                  num_protectors=3,
                  protector_safe_distance=7,
                  num_predators=6,
-                 predator_view_distance=5,
+                 predator_view_distance=4,
                  predator_kill_distance=2,
                  num_food=20,
                  use_zones=False,
                  visuals=False,
                  pulse_zones=False,
-                 num_previous_agents=100,
-                 genome_store_size=1000,
+                 num_previous_agents=300,
+                 genome_store_size=300,
                  fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=1.00,
                  rebirth_genome_store=1.00,
@@ -2059,6 +2059,9 @@ else:
 # implement num_prev_states into current architecture
 #
 # Record weighs of top_n in genome store after each reset or respawn
-
+#
+# Genetic diversity paper
+#
+# Softmax from each block instead of full action output?
 
 
