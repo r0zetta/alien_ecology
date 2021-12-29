@@ -385,8 +385,8 @@ class game_space:
                  use_zones=False,
                  visuals=False,
                  pulse_zones=False,
-                 num_previous_agents=300,
-                 genome_store_size=500,
+                 num_previous_agents=100,
+                 genome_store_size=100,
                  fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=1.00,
                  rebirth_genome_store=1.00,
@@ -1598,17 +1598,24 @@ class game_space:
         with open(self.savedir + "/genome_store.pkl", "rb") as f:
             self.genome_store = pickle.load(f)
 
+    def make_single_weight(self):
+        val = 0.0
+        if self.integer_weights == False:
+            val = random.uniform(-1*self.weight_range, self.weight_range)
+        else:
+            val = random.randint(-1*self.weight_range, self.weight_range+1)
+            if val == 0:
+                val = np.random.uniform(-0.1, 0.1)
+        return float(val)
+
     def make_weights(self, num):
         if self.integer_weights == False:
             return np.random.uniform(-1*self.weight_range, self.weight_range,num)
         else:
-            weights = np.random.randint(-1*self.weight_range, self.weight_range+1, num)
-            new_weights = []
-            for w in weights:
-                if w == 0:
-                    w = np.random.uniform(-0.3, 0.3)
-                new_weights.append(float(w))
-            return new_weights
+            weights = []
+            for _ in range(num):
+                weights.append(self.make_single_weight())
+            return weights
 
     def make_random_genome(self):
         genome = []
@@ -1683,13 +1690,7 @@ class game_space:
             mutation_chance = self.mutation_rate * gen_len
             if random.random() < mutation_chance:
                 index = random.choice(range(gen_len))
-                val = 0
-                if self.integer_weights == False:
-                    val = random.uniform(-1*self.weight_range, self.weight_range)
-                else:
-                    val = random.randint(-1*self.weight_range, self.weight_range+1)
-                    if val == 0:
-                        val = np.random.uniform(-0.3, 0.3)
+                val = self.make_single_weight()
                 gen[index] = val
             new_genome.append(gen)
         return new_genome
@@ -1703,13 +1704,7 @@ class game_space:
         mutation_chance = self.mutation_rate * gen_len
         if random.random() < mutation_chance:
             index = random.choice(range(gen_len))
-            val = 0
-            if self.integer_weights == False:
-                val = random.uniform(-1*self.weight_range, self.weight_range)
-            else:
-                val = random.randint(-1*self.weight_range, self.weight_range+1)
-                if val == 0:
-                    val = np.random.uniform(-0.3, 0.3)
+            val = self.make_single_weight()
             cg[index] = val
         new_genome = []
         i = 0
@@ -1820,8 +1815,7 @@ class game_space:
         if fitness > self.agent_start_energy and fitness > min_fitness:
             if len(self.genome_store) >= self.genome_store_size:
                 self.genome_store.pop(min_item)
-            if self.is_genome_unique(entry[0]):
-                self.genome_store.append(entry)
+            self.genome_store.append(entry)
 
     def make_new_genome(self, atype):
         if random.random() < self.respawn_genome_store:
