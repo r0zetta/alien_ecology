@@ -412,11 +412,11 @@ class game_space:
                  predator_view_distance=4,
                  predator_kill_distance=2,
                  num_shooters=8,
-                 shooter_visible_range=30,
-                 shoot_cooldown=10,
+                 shooter_visible_range=20,
+                 shoot_cooldown=8,
                  bullet_life=100,
-                 bullet_speed=0.3,
-                 bullet_radius=0.25,
+                 bullet_speed=0.35,
+                 bullet_radius=0.20,
                  num_food=0,
                  use_zones=False,
                  visuals=False,
@@ -2383,7 +2383,9 @@ def update():
             xabs = gs.things['bullets'][index].xpos
             yabs = gs.things['bullets'][index].ypos
             zabs = gs.things['bullets'][index].zpos
+            alpha = ((gs.things['bullets'][index].lifespan/(gs.bullet_life+1)) * 100) + 155
             gs.things['bullets'][index].entity.position = (xabs, yabs, zabs)
+            gs.things['bullets'][index].entity.color = color.rgba(255,255,255,alpha)
 
     # Update protector positions
     for index, protector in enumerate(gs.things['protectors']):
@@ -2462,8 +2464,6 @@ else:
 # Increase gs_size, but only allow unique genomes to be added?
 #
 # Predators cause energy drain in a radius instead of eating agents
-# Add non-toroid version
-# - edges need to be an input to models
 #
 # implement num_prev_states into current architecture
 #
@@ -2472,18 +2472,28 @@ else:
 # Genetic diversity paper
 # Do not store the same genome more than once
 #
+# Exp 1
 # Predators=6, protectors=3, food=20
 # agents=10, drain=1, start_energy=50
 # respawn_genome_store=1.00
 # gs_size=50
 # top_n=1.0
 # lr = 1e-2
-# mutation_rate=0.0015 == 337@16000
 # mutation_rate=0.0013 == 378@16000
-# mutation_rate=0.0011 == ???@16000
 # integer_weights=True
 # evolve_by_block=True
 # hidden_factor = 2.0
 
 
+# Exp 2
+# shooters=8
+# agents=20, drain=1, start_energy=100
+# respawn_genome_store=1.00
+# gs_size=50
+# top_n=1.0
+# lr = 1e-2
+# mutation_rate=0.0013
+# integer_weights=True
+# evolve_by_block=True
+# hidden_factor = 2.0
 
