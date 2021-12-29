@@ -45,9 +45,9 @@ class Net(nn.Module):
             a = F.relu(self.blocks[index][0](i))
             a = F.relu(self.blocks[index][1](a))
             block_out[index] = a
-            z = torch.zeros_like(a)
-            z[torch.argmax(a)] = 1.0
-            block_out[index] = z
+            #z = torch.zeros_like(a)
+            #z[torch.argmax(a)] = 1.0
+            #block_out[index] = z
             current_index = current_index+self.inps[index]
         rc = torch.ravel(torch.tensor(block_out))
         a = F.softmax(F.relu(self.action(rc)), dim=-1)
@@ -363,11 +363,11 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 num_prev_states=1,
+                 hidden_factor=2,
                  num_recent_actions=1000,
                  learners=0.50,
                  evaluate_learner_every=10,
-                 mutation_rate=0.001,
+                 mutation_rate=0.0013,
                  evolve_by_block=True,
                  integer_weights=True,
                  weight_range=1,
@@ -384,9 +384,10 @@ class game_space:
                  num_food=20,
                  use_zones=False,
                  visuals=False,
+                 inference=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=100,
+                 genome_store_size=50,
                  fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=1.00,
                  rebirth_genome_store=1.00,
@@ -416,6 +417,7 @@ class game_space:
         self.integer_weights = integer_weights
         self.weight_range = weight_range
         self.visuals = visuals
+        self.inference = inference
         self.pulse_zones = pulse_zones
         self.savedir = savedir
         self.statsdir = statsdir
@@ -423,7 +425,8 @@ class game_space:
         self.load_stats()
         self.record_every = record_every
         self.save_every = save_every
-        self.num_prev_states = num_prev_states
+        self.num_prev_states = 1
+        self.hidden_factor = hidden_factor
         self.area_size = area_size
         self.num_agents = num_agents
         self.agent_start_energy = agent_start_energy
@@ -488,7 +491,7 @@ class game_space:
         self.net_desc = []
         for index, item in enumerate(self.observations):
             obs = len(self.observations[index])
-            hidden = obs*1
+            hidden = int(obs*self.hidden_factor)
             entry = [obs, hidden]
             self.net_desc.append(entry)
         self.action_size = len(self.actions)
@@ -1058,7 +1061,8 @@ class game_space:
             self.things['agents'][index].previous_stats.append(entry)
             self.deaths += 1
             self.resets += 1
-            self.things['agents'][index].model.finish_episode()
+            if self.inference == False:
+                self.things['agents'][index].model.finish_episode()
             self.things['agents'][index].reset()
             xpos, ypos = self.get_safe_spawn_location()
             self.things['agents'][index].xpos = xpos
@@ -1075,7 +1079,12 @@ class game_space:
             xpos, ypos = self.get_safe_spawn_location()
             self.things['agents'][index].xpos = xpos
             self.things['agents'][index].ypos = ypos
-            genome = self.make_new_genome(0)
+            genome = entry[0]
+            if self.inference == False:
+                genome = self.make_new_genome(0)
+            else:
+                num_g = min(len(self.genome_store), int(self.genome_store_size * self.top_n))
+                genome = random.choice(self.get_best_genomes_from_store(num_g, None))
             self.things['agents'][index].set_genome(genome)
             self.set_initial_agent_state(index)
 
@@ -1964,6 +1973,8 @@ class game_space:
         msg = ""
         msg += self.print_run_stats()
         msg += "Step: " + str(self.steps)
+        if self.inference == True:
+            msg += " --INFERENCE--"
         msg += "\n"
         msg += "Agents: " + str(len(self.things['agents']))
         msg += "  learning: " + str(l_agents)
@@ -2048,13 +2059,16 @@ def update():
 
 
 # Train the game
-#random.seed(1337)
+random.seed(123456)
 
 print_visuals = False
+inference = False
 
 if len(sys.argv)>1:
     if "v" or "-v" in sys.argv[1:]:
         print_visuals = True
+    if "i" or "-i" in sys.argv[1:]:
+        inference = True
 
 savedir = "alien_ecology_save"
 if not os.path.exists(savedir):
@@ -2072,7 +2086,7 @@ if print_visuals == True:
     window.exit_button.visible = False
     window.fps_counter.enabled = False
 
-    gs = game_space(visuals=True)
+    gs = game_space(visuals=True, inference=inference)
     camera_pos1 = -1 * int(gs.area_size/2)
     camera_pos2 = int(gs.area_size*2)
 
@@ -2080,14 +2094,14 @@ if print_visuals == True:
     app.run()
 
 else:
-    gs = game_space(visuals=False)
+    gs = game_space(visuals=False, inference=inference)
     while True:
         gs.step()
 
 # Inspired my matrix:
 # multiple randomly moving shooters
 # agents die if hit by bullet
-# agents kill shooter if they collide with it
+# agents kill shooter if they collide with it and gain energy
 #
 # Predators cause energy drain in a radius instead of eating agents
 # Add non-toroid version
@@ -2095,13 +2109,25 @@ else:
 #
 # implement num_prev_states into current architecture
 #
+# Implement inference mode
+#
 # Record weighs of top_n in genome store after each reset or respawn
 #
 # Genetic diversity paper
 # Do not store the same genome more than once
 #
-# Results:
-# top_n 1.0, gs_size: 300: reached 400 mean age on step 170,000 ([7, 7, 7])
-# top_n 0.5, gs_size: 300: reached 400 mean age on step 240,000 ([7, 7, 7])
-# top_n 1.0, gs_size: 500: reached 400 mean age on step 240,000 ([7, 7, 7])
+# Predators=6, protectors=3, food=20
+# agents=10, drain=1, start_energy=50
+# respawn_genome_store=1.00
+# gs_size=50
+# top_n=1.0
+# lr = 1e-2
+# mutation_rate=0.0015 == 337@16000
+# mutation_rate=0.0013 == 378@16000
+# mutation_rate=0.0011 == ???@16000
+# integer_weights=True
+# evolve_by_block=True
+# hidden_factor = 2.0
+
+
 
