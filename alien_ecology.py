@@ -1035,12 +1035,12 @@ class game_space:
         return self.get_nearest_thing('agents', aindex)
 
     def get_boundary_up(self, aindex):
-        if (self.things['agents'][aindex].ypos - self.agent_view_distance) <= 0:
+        if (self.things['agents'][aindex].ypos + self.agent_view_distance) >= self.area_size:
             return 1
         return 0
 
     def get_boundary_down(self, aindex):
-        if (self.things['agents'][aindex].ypos + self.agent_view_distance) >= self.area_size:
+        if (self.things['agents'][aindex].ypos - self.agent_view_distance) <= 0:
             return 1
         return 0
 
