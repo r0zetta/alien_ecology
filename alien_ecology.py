@@ -372,6 +372,7 @@ class game_space:
                  integer_weights=True,
                  weight_range=1,
                  area_size=50,
+                 area_toroid=False,
                  num_agents=10,
                  agent_start_energy=50,
                  agent_energy_drain=1,
@@ -428,6 +429,7 @@ class game_space:
         self.num_prev_states = 1
         self.hidden_factor = hidden_factor
         self.area_size = area_size
+        self.area_toroid = area_toroid
         self.num_agents = num_agents
         self.agent_start_energy = agent_start_energy
         self.agent_energy_drain = agent_energy_drain
@@ -458,6 +460,10 @@ class game_space:
                         "propel_down",
                         "propel_left",
                         ]
+        boundary_obs = ["boundary_up",
+                        "boundary_right",
+                        "boundary_down",
+                        "boundary_left"]
         food_obs = ["food_up",
                     "food_right",
                     "food_down",
@@ -481,6 +487,8 @@ class game_space:
                      "visible_predators",
                      "own_energy"]
         self.observations = []
+        if self.area_toroid == False:
+            self.observations.append(boundary_obs)
         if self.num_food > 0:
             self.observations.append(food_obs)
         if self.num_protectors > 0:
@@ -564,11 +572,12 @@ class game_space:
         self.apply_agent_physics()
         self.run_agent_actions()
         self.update_agent_status()
-        if self.save_every > 0:
-            if self.steps % self.save_every == 0:
-                self.save_genomes()
-        if self.save_every > 0 and self.steps % 5000 == 0:
-            self.save_stats()
+        if self.inference == False:
+            if self.save_every > 0:
+                if self.steps % self.save_every == 0:
+                    self.save_genomes()
+            if self.save_every > 0 and self.steps % 5000 == 0:
+                self.save_stats()
         if self.steps % 50 == 0:
             self.print_stats()
         self.steps += 1
@@ -629,7 +638,10 @@ class game_space:
         return xvel, yvel
 
     def update_position(self, xpos, ypos):
-        return self.update_position_toroid(xpos, ypos)
+        if self.area_toroid == True:
+            return self.update_position_toroid(xpos, ypos)
+        else:
+            return self.update_position_bounded(xpos, ypos)
 
     def update_position_toroid(self, xpos, ypos):
         nx = xpos
@@ -692,7 +704,10 @@ class game_space:
         return nxv, nyv
 
     def viewpoint_select(self, xv, yv):
-        return self.viewpoint_toroid(xv, yv)
+        if self.area_toroid == True:
+            return self.viewpoint_toroid(xv, yv)
+        else:
+            return self.viewpoint_bounded(xv, yv)
 
     def viewpoint_toroid(self, xv, yv):
         nxv = xv
@@ -705,6 +720,19 @@ class game_space:
             nyv -= self.area_size
         if yv < 0:
             nyv += self.area_size
+        return nxv, nyv
+
+    def viewpoint_bounded(self, xv, yv):
+        nxv = xv
+        nyv = yv
+        if xv > self.area_size:
+            nxv = self.area_size
+        if xv < 0:
+            nxv = 0
+        if yv > self.area_size:
+            nyv = self.area_size
+        if yv < 0:
+            nyv = 0
         return nxv, nyv
 
     def get_viewpoint_in_direction(self, index, direction):
@@ -1006,6 +1034,26 @@ class game_space:
     def get_nearest_agent(self, aindex):
         return self.get_nearest_thing('agents', aindex)
 
+    def get_boundary_up(self, aindex):
+        if (self.things['agents'][aindex].ypos - self.agent_view_distance) <= 0:
+            return 1
+        return 0
+
+    def get_boundary_down(self, aindex):
+        if (self.things['agents'][aindex].ypos + self.agent_view_distance) >= self.area_size:
+            return 1
+        return 0
+
+    def get_boundary_left(self, aindex):
+        if (self.things['agents'][aindex].xpos - self.agent_view_distance) <= 0:
+            return 1
+        return 0
+
+    def get_boundary_right(self, aindex):
+        if (self.things['agents'][aindex].xpos + self.agent_view_distance) >= self.area_size:
+            return 1
+        return 0
+
     def evaluate_learner(self, index):
         if len(self.things['agents'][index].previous_stats) >= self.evaluate_learner_every:
             mpf = np.mean([x[self.fitness_index] for x in self.things['agents'][index].previous_stats])
@@ -1084,7 +1132,10 @@ class game_space:
                 genome = self.make_new_genome(0)
             else:
                 num_g = min(len(self.genome_store), int(self.genome_store_size * self.top_n))
-                genome = random.choice(self.get_best_genomes_from_store(num_g, None))
+                if num_g > 0:
+                    genome = random.choice(self.get_best_genomes_from_store(num_g, None))
+                else:
+                    genome = self.make_random_genome()
             self.things['agents'][index].set_genome(genome)
             self.set_initial_agent_state(index)
 
@@ -2067,7 +2118,7 @@ inference = False
 if len(sys.argv)>1:
     if "v" or "-v" in sys.argv[1:]:
         print_visuals = True
-    if "i" or "-i" in sys.argv[1:]:
+    elif "i" or "-i" in sys.argv[1:]:
         inference = True
         print_visuals = True
 
@@ -2109,8 +2160,6 @@ else:
 # - edges need to be an input to models
 #
 # implement num_prev_states into current architecture
-#
-# Implement inference mode
 #
 # Record weighs of top_n in genome store after each reset or respawn
 #
