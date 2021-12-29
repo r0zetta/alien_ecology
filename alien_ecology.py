@@ -326,7 +326,6 @@ class Protector:
         self.xvel = 0
         self.yvel = 0
         self.speed = 0.1
-        self.visible = 5
         self.orient = 0 # 0-7 in 45 degree increments
         self.inertial_damping = 0.80
         self.entity = None
@@ -341,10 +340,40 @@ class Predator:
         self.xvel = 0
         self.yvel = 0
         self.speed = 0.2
-        self.visible = 5
         self.orient = 0 # 0-7 in 45 degree increments
         self.inertial_damping = 0.70
         self.entity = None
+
+class Shooter:
+    def __init__(self, x, y, z):
+        self.xpos = x
+        self.ypos = y
+        self.zpos = z
+        self.xvel = 0
+        self.yvel = 0
+        self.speed = 0.2
+        self.orient = 0 # 0-7 in 45 degree increments
+        self.inertial_damping = 0.70
+        self.shoot_cooldown = 0
+        self.entity = None
+
+class Bullet:
+    def __init__(self, x, y, z, xv, yv):
+        self.xpos = x
+        self.ypos = y
+        self.zpos = z
+        self.xvel = xv
+        self.yvel = yv
+        self.lifespan = 20
+        self.entity = None
+
+    def reuse(self, x, y, z, xv, yv):
+        self.xpos = x
+        self.ypos = y
+        self.zpos = z
+        self.xvel = xv
+        self.yvel = yv
+        self.lifespan = 20
 
 class Zone:
     def __init__(self, x, y, z, ztype, radius, strength):
@@ -372,17 +401,23 @@ class game_space:
                  integer_weights=True,
                  weight_range=1,
                  area_size=50,
-                 area_toroid=False,
-                 num_agents=10,
-                 agent_start_energy=50,
+                 area_toroid=True,
+                 num_agents=20,
+                 agent_start_energy=100,
                  agent_energy_drain=1,
                  agent_view_distance=3,
                  num_protectors=0,
                  protector_safe_distance=7,
-                 num_predators=6,
+                 num_predators=0,
                  predator_view_distance=4,
                  predator_kill_distance=2,
-                 num_food=20,
+                 num_shooters=8,
+                 shooter_visible_range=30,
+                 shoot_cooldown=10,
+                 bullet_life=100,
+                 bullet_speed=0.3,
+                 bullet_radius=0.25,
+                 num_food=0,
                  use_zones=False,
                  visuals=False,
                  inference=False,
@@ -404,6 +439,7 @@ class game_space:
         self.continuations = 0
         self.deaths = 0
         self.eaten = 0
+        self.shot = 0
         self.num_recent_actions = num_recent_actions
         self.num_previous_agents = num_previous_agents
         self.fitness_index = fitness_index
@@ -419,6 +455,8 @@ class game_space:
         self.weight_range = weight_range
         self.visuals = visuals
         self.inference = inference
+        if self.inference == True:
+            self.learners = 0.0
         self.pulse_zones = pulse_zones
         self.savedir = savedir
         self.statsdir = statsdir
@@ -438,6 +476,12 @@ class game_space:
         self.num_predators = num_predators
         self.predator_view_distance = predator_view_distance
         self.predator_kill_distance = predator_kill_distance
+        self.num_shooters = num_shooters
+        self.shooter_visible_range = shooter_visible_range
+        self.shoot_cooldown = shoot_cooldown
+        self.bullet_life = bullet_life
+        self.bullet_speed = bullet_speed
+        self.bullet_radius = bullet_radius
         self.num_food = num_food
         self.use_zones = use_zones
         self.agent_view_distance = agent_view_distance
@@ -460,6 +504,14 @@ class game_space:
                         "propel_down",
                         "propel_left",
                         ]
+        bullet_obs = ["bullets_up",
+                      "bullets_right",
+                      "bullets_down",
+                      "bullets_left"]
+        shooter_obs = ["shooters_up",
+                       "shooters_right",
+                       "shooters_down",
+                       "shooters_left"]
         boundary_obs = ["boundary_up",
                         "boundary_right",
                         "boundary_down",
@@ -495,6 +547,9 @@ class game_space:
             self.observations.append(protector_obs)
         if self.num_predators > 0:
             self.observations.append(predator_obs)
+        if self.num_shooters > 0:
+            self.observations.append(shooter_obs)
+            self.observations.append(bullet_obs)
         self.observation_size = sum([len(x) for x in self.observations])
         self.net_desc = []
         for index, item in enumerate(self.observations):
@@ -527,6 +582,7 @@ class game_space:
         self.spawn_zones()
         self.spawn_food()
         self.previous_agents = deque()
+        self.create_shooters()
         self.create_predators()
         self.create_protectors()
         self.create_genomes()
@@ -562,10 +618,13 @@ class game_space:
         self.net_desc.append([out_cat, 1])
 
     def step(self):
-        self.apply_protector_physics()
-        self.run_protector_actions()
+        self.run_bullet_actions()
+        self.apply_shooter_physics()
+        self.run_shooter_actions()
         self.apply_predator_physics()
         self.run_predator_actions()
+        self.apply_protector_physics()
+        self.run_protector_actions()
         self.apply_zone_effects()
         self.set_agent_states()
         #self.make_new_states()
@@ -846,8 +905,8 @@ class game_space:
         ypos = self.things['agents'][aindex].ypos
         distances = []
         for i in range(len(self.things[ttype])):
-            ax = self.things['agents'][i].xpos
-            ay = self.things['agents'][i].ypos
+            ax = self.things[ttype][i].xpos
+            ay = self.things[ttype][i].ypos
             radius = self.agent_view_distance
             if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
                 distances.append(self.distance(xpos, ypos, ax, ay))
@@ -1077,11 +1136,13 @@ class game_space:
                     else:
                         num_g = min(len(self.previous_agents), int(self.num_previous_agents * self.top_n))
                         g = random.choice(self.get_best_previous_genomes(num_g, None))
-                    if g is not None and len(g) == self.genome_size:
+                    if g is not None:
                         self.things['agents'][index].set_genome(g)
                         self.rebirths += 1
                 else:
                     self.continuations += 1
+            else:
+                self.continuations += 1
 
     def store_agent_entry(self, index):
             l = int(self.things['agents'][index].learnable)
@@ -1146,6 +1207,17 @@ class game_space:
             self.things['agents'][index].age += 1
             xpos = self.things['agents'][index].xpos
             ypos = self.things['agents'][index].ypos
+            # XXX Add reward for eating shooters
+            if self.num_shooters > 0:
+                nearby_shooters = self.get_shooters_in_radius(xpos, ypos, 1)
+                if len(nearby_shooters) > 0:
+                    fi = random.choice(nearby_shooters)
+                    self.respawn_shooter(fi)
+                    self.things['agents'][index].energy += 50
+                    self.things['agents'][index].happiness += 10
+                    # Reward learning agents for eating food
+                    if len(self.things['agents'][index].model.rewards) > 0:
+                        self.things['agents'][index].model.rewards[-1] = np.float32(1.0)
             if self.num_food > 0:
                 nearby_food = self.get_food_in_radius(xpos, ypos, 1)
                 if len(nearby_food) > 0:
@@ -1466,17 +1538,11 @@ class game_space:
                 dead = []
                 reset = []
                 self.eaten += len(victims)
-                try:
-                    for v in victims:
-                        if self.things['agents'][v].learnable == True:
-                            reset.append(v)
-                        else:
-                            dead.append(v)
-                except:
-                    print(victims)
-                    sys.stdout.write('\a\a\a\a\a')
-                    sys.stdout.flush()
-                    sys.exit(0)
+                for v in victims:
+                    if self.things['agents'][v].learnable == True:
+                        reset.append(v)
+                    else:
+                        dead.append(v)
                 if len(reset) > 0:
                     self.reset_agents(reset)
                 if len(dead) > 0:
@@ -1499,9 +1565,240 @@ class game_space:
                     self.predator_move_random(index)
             self.update_predator_position(index)
 
+##################
+# Shooter actions
+##################
+    def set_shooter_entity(self, index):
+        xabs = self.things['shooters'][index].xpos
+        yabs = self.things['shooters'][index].ypos
+        zabs = self.things['shooters'][index].zpos
+        s = 1
+        texture = "textures/teal"
+        self.things['shooters'][index].entity = Entity(model='sphere',
+                                              color=color.white,
+                                              scale=(s,s,s),
+                                              position = (xabs, yabs, zabs),
+                                              texture=texture)
+
+    def spawn_random_shooter(self):
+        xpos = random.random()*self.area_size
+        ypos = random.random()*self.area_size
+        zpos = -1
+        a = Shooter(xpos,
+                    ypos,
+                    zpos)
+        self.things['shooters'].append(a)
+        index = len(self.things['shooters'])-1
+        if self.visuals == True:
+            self.set_shooter_entity(index)
+
+    def respawn_shooter(self, index):
+        xpos = random.random()*self.area_size
+        ypos = random.random()*self.area_size
+        self.things['shooters'][index].xpos = xpos
+        self.things['shooters'][index].ypos = ypos
+        self.things['shooters'][index].xvel = 0
+        self.things['shooters'][index].yvel = 0
+        self.things['shooters'][index].orient = 0
+        self.things['shooters'][index].shoot_cooldown = 0
+
+    def create_shooters(self):
+        self.things['shooters'] = []
+        self.things['bullets'] = []
+        for n in range(self.num_shooters):
+            self.spawn_random_shooter()
+
+    def get_shooters_in_radius(self, xpos, ypos, radius):
+        return self.get_things_in_radius('shooters', xpos, ypos, radius)
+
+    def get_visible_shooters(self, aindex):
+        return self.get_visible_things('shooters', aindex)
+
+    def get_shooters_up(self, aindex):
+        return self.get_things_up('shooters', aindex)
+
+    def get_shooters_right(self, aindex):
+        return self.get_things_right('shooters', aindex)
+
+    def get_shooters_down(self, aindex):
+        return self.get_things_down('shooters', aindex)
+
+    def get_shooters_left(self, aindex):
+        return self.get_things_left('shooters', aindex)
+
+    def shooter_move_random(self, index):
+        action = random.choice([0,1,2])
+        if action == 0:
+            self.propel_thing('shooters', index)
+        elif action == 1:
+            self.rotate_right('shooters', index)
+        else:
+            self.rotate_left('shooters', index)
+
+    def apply_shooter_physics(self):
+        return self.apply_physics('shooters')
+
+    def update_shooter_position(self, index):
+        return self.update_thing_position('shooters', index)
+
+    def run_shooter_actions(self):
+        for index in range(len(self.things['shooters'])):
+            xpos = self.things['shooters'][index].xpos
+            ypos = self.things['shooters'][index].ypos
+            cooldown = self.things['shooters'][index].shoot_cooldown
+            if cooldown > 0:
+                self.things['shooters'][index].shoot_cooldown -= 1
+            radius = self.shooter_visible_range
+            shortest_index = None
+            shortest_value = None
+            distances = []
+            for i in range(len(self.things['agents'])):
+                ax = self.things['agents'][i].xpos
+                ay = self.things['agents'][i].ypos
+                if self.filter_by_distance(xpos, ypos, ax, ay, radius) is True:
+                    distances.append(self.distance(xpos, ypos, ax, ay))
+            if len(distances) > 0:
+                shortest_index = 0
+                shortest_value = distances[0]
+                if len(distances) > 1:
+                    shortest_index = np.argsort(distances, axis=0)[1]
+                    shortest_value = distances[shortest_index]
+                if cooldown < 1:
+                    angle = math.atan2(ay-ypos, ax-xpos)
+                    xc = math.cos(angle) * self.bullet_speed
+                    yc = math.sin(angle) * self.bullet_speed
+                    self.spawn_bullet(xpos, ypos, xc, yc)
+                    self.things['shooters'][index].shoot_cooldown = self.shoot_cooldown
+            self.shooter_move_random(index)
+            self.update_shooter_position(index)
+
+##################
+# Bullet actions
+##################
+    def set_bullet_entity(self, index):
+        xabs = self.things['bullets'][index].xpos
+        yabs = self.things['bullets'][index].ypos
+        zabs = self.things['bullets'][index].zpos
+        s = self.bullet_radius
+        c = [255, 255, 255, 255]
+        self.things['bullets'][index].entity = Entity(model='sphere',
+                                         color=color.rgba(*c),
+                                         scale=(s,s,s),
+                                         position = (xabs, yabs, zabs))
+
+    def spawn_bullet(self, xpos, ypos, xv, yv):
+        zpos = -1
+        # If there are existing unused bullets, reuse one
+        for index in range(len(self.things['bullets'])):
+            ls = self.things['bullets'][index].lifespan
+            if ls == 0:
+                self.things['bullets'][index].reuse(xpos, ypos, zpos, xv, yv)
+                self.things['bullets'][index].lifespan = self.bullet_life
+                if self.visuals == True:
+                    self.things['bullets'][index].entity.enable()
+                return
+        # Else spawn a new one and append it to the existing list
+        b = Bullet(xpos, ypos, zpos, xv, yv)
+        b.lifespan = self.bullet_life
+        self.things['bullets'].append(b)
+        index = len(self.things['bullets'])-1
+        if self.visuals == True:
+            self.set_bullet_entity(index)
+
+    def run_bullet_actions(self):
+        if 'bullets' not in self.things:
+            return
+        for index in range(len(self.things['bullets'])):
+            ls = self.things['bullets'][index].lifespan
+            hit = False
+            if ls > 0:
+                ls = ls - 1
+                self.update_bullet_position(index)
+                # Check for agents hit
+                xpos = self.things['bullets'][index].xpos
+                ypos = self.things['bullets'][index].ypos
+                victims = self.get_agents_in_radius(xpos, ypos, self.bullet_radius)
+                if len(victims) > 0:
+                    hit = True
+                    dead = []
+                    reset = []
+                    self.shot += len(victims)
+                    for v in victims:
+                        if self.things['agents'][v].learnable == True:
+                            reset.append(v)
+                        else:
+                            dead.append(v)
+                    if len(reset) > 0:
+                        self.reset_agents(reset)
+                    if len(dead) > 0:
+                        self.kill_agents(dead)
+                if hit == True:
+                    ls = 0
+                # Handle bounded version - set ls to 0 of bullet hits edge
+                if self.area_toroid == False:
+                    if xpos < 0 or xpos > self.area_size or ypos < 0 or ypos > self.area_size:
+                        ls = 0
+                if ls < 0:
+                    ls = 0
+                self.things['bullets'][index].lifespan = ls
+                if ls == 0:
+                    if self.visuals == True:
+                        self.things['bullets'][index].entity.disable()
+
+    def update_bullet_position(self, index):
+        return self.update_thing_position('bullets', index)
+
+    def get_active_bullets(self):
+        if 'bullets' not in self.things:
+            return 0
+        active = [i for i, x in enumerate(self.things['bullets']) if x.lifespan > 0]
+        return active
+
+    def get_bullets_in_radius(self, xpos, ypos, radius):
+        active_b = self.get_active_bullets()
+        all_b = self.get_things_in_radius('bullets', xpos, ypos, radius)
+        actual = list(set(active_b).intersection(set(all_b)))
+        return actual
+
+    def get_visible_bullets(self, aindex):
+        return self.get_visible_things('bullets', aindex)
+
+    def get_bullets_up(self, aindex):
+        return self.get_things_up('bullets', aindex)
+
+    def get_bullets_right(self, aindex):
+        return self.get_things_right('bullets', aindex)
+
+    def get_bullets_down(self, aindex):
+        return self.get_things_down('bullets', aindex)
+
+    def get_bullets_left(self, aindex):
+        return self.get_things_left('bullets', aindex)
+
+
+
+
 #################
 # Zone routines
 #################
+    def set_zone_entity(self, index):
+        xabs = self.things['zones'][index].xpos
+        yabs = self.things['zones'][index].ypos
+        zabs = self.things['zones'][index].zpos
+        ztype = self.things['zones'][index].ztype
+        s = self.things['zones'][index].radius * 2
+        c = self.things['zones'][index].zone_colors[ztype]
+        alpha = self.things['zones'][index].strength*150
+        c.append(alpha)
+        self.things['zones'][index].entity = Entity(model='sphere',
+                                          color=color.rgba(*c),
+                                          scale=(s,s,s),
+                                          position = (xabs, yabs, zabs))
+        self.things['zones'][index].radius_entity = Entity(model='sphere',
+                                                 color=color.rgba(*c),
+                                                 scale=(s,s,s),
+                                                 position = (xabs, yabs, zabs))
+
     def spawn_zones(self):
         if self.use_zones == False:
             return
@@ -1557,27 +1854,20 @@ class game_space:
                     self.things['agents'][ai].xvel = naxv
                     self.things['agents'][ai].yvel = nayv
 
-    def set_zone_entity(self, index):
-        xabs = self.things['zones'][index].xpos
-        yabs = self.things['zones'][index].ypos
-        zabs = self.things['zones'][index].zpos
-        ztype = self.things['zones'][index].ztype
-        s = self.things['zones'][index].radius * 2
-        c = self.things['zones'][index].zone_colors[ztype]
-        alpha = self.things['zones'][index].strength*150
-        c.append(alpha)
-        self.things['zones'][index].entity = Entity(model='sphere',
-                                          color=color.rgba(*c),
-                                          scale=(s,s,s),
-                                          position = (xabs, yabs, zabs))
-        self.things['zones'][index].radius_entity = Entity(model='sphere',
-                                                 color=color.rgba(*c),
-                                                 scale=(s,s,s),
-                                                 position = (xabs, yabs, zabs))
-
 #################
 # Food routines
 #################
+    def set_food_entity(self, index):
+        xabs = self.things['food'][index].xpos
+        yabs = self.things['food'][index].ypos
+        zabs = self.things['food'][index].zpos
+        s = 1
+        c = [255, 153, 51, 120]
+        self.things['food'][index].entity = Entity(model='sphere',
+                                         color=color.rgba(*c),
+                                         scale=(s,s,s),
+                                         position = (xabs, yabs, zabs))
+
     def spawn_food(self):
         if self.num_food < 1:
             return
@@ -1617,17 +1907,6 @@ class game_space:
 
     def get_food_left(self, aindex):
         return self.get_things_left('food', aindex)
-
-    def set_food_entity(self, index):
-        xabs = self.things['food'][index].xpos
-        yabs = self.things['food'][index].ypos
-        zabs = self.things['food'][index].zpos
-        s = 1
-        c = [255, 153, 51, 120]
-        self.things['food'][index].entity = Entity(model='sphere',
-                                         color=color.rgba(*c),
-                                         scale=(s,s,s),
-                                         position = (xabs, yabs, zabs))
 
 ########################################
 # Routines related to genetic algorithms
@@ -1984,6 +2263,7 @@ class game_space:
         msg += "  continuations: " + str(self.continuations)
         msg += "  deaths: " + str(self.deaths)
         msg += "  eaten: " + str(self.eaten)
+        msg += "  shot: " + str(self.shot)
         msg += "\n"
         return msg
 
@@ -2087,6 +2367,24 @@ def update():
             orient = gs.things['predators'][index].orient
             gs.things['predators'][index].entity.rotation = (45*orient, 90, 0)
 
+    # Update shooter positions
+    for index, shooter in enumerate(gs.things['shooters']):
+        if gs.things['shooters'][index].entity is not None:
+            xabs = gs.things['shooters'][index].xpos
+            yabs = gs.things['shooters'][index].ypos
+            zabs = gs.things['shooters'][index].zpos
+            gs.things['shooters'][index].entity.position = (xabs, yabs, zabs)
+            orient = gs.things['shooters'][index].orient
+            gs.things['shooters'][index].entity.rotation = (45*orient, 90, 0)
+
+    # Update bullet positions
+    for index, bullet in enumerate(gs.things['bullets']):
+        if gs.things['bullets'][index].entity is not None:
+            xabs = gs.things['bullets'][index].xpos
+            yabs = gs.things['bullets'][index].ypos
+            zabs = gs.things['bullets'][index].zpos
+            gs.things['bullets'][index].entity.position = (xabs, yabs, zabs)
+
     # Update protector positions
     for index, protector in enumerate(gs.things['protectors']):
         if gs.things['protectors'][index].entity is not None:
@@ -2102,6 +2400,7 @@ def update():
             orient = gs.things['protectors'][index].orient
             gs.things['protectors'][index].entity.rotation = (45*orient, 90, 0)
 
+    # Animate pulse zones
     if gs.pulse_zones == True:
         for index, zone in enumerate(gs.things['zones']):
             radius = gs.things['zones'][index].radius
@@ -2116,9 +2415,9 @@ print_visuals = False
 inference = False
 
 if len(sys.argv)>1:
-    if "v" or "-v" in sys.argv[1:]:
+    if "-v" in sys.argv[1:]:
         print_visuals = True
-    elif "i" or "-i" in sys.argv[1:]:
+    elif "-i" in sys.argv[1:]:
         inference = True
         print_visuals = True
 
@@ -2154,6 +2453,13 @@ else:
 # multiple randomly moving shooters
 # agents die if hit by bullet
 # agents kill shooter if they collide with it and gain energy
+#
+# Update report
+# 1. reward is sparse
+# 2. episodes take longer as training proceeds
+#
+# Anneal top_n as training progresses?
+# Increase gs_size, but only allow unique genomes to be added?
 #
 # Predators cause energy drain in a radius instead of eating agents
 # Add non-toroid version
