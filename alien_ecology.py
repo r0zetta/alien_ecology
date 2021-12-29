@@ -408,7 +408,7 @@ class game_space:
                  agent_view_distance=3,
                  num_protectors=0,
                  protector_safe_distance=7,
-                 num_predators=0,
+                 num_predators=5,
                  predator_view_distance=4,
                  predator_kill_distance=2,
                  num_shooters=8,
@@ -2487,6 +2487,7 @@ else:
 
 # Exp 2
 # shooters=8
+# num_predators=5
 # agents=20, drain=1, start_energy=100
 # respawn_genome_store=1.00
 # gs_size=50
