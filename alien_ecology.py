@@ -45,6 +45,9 @@ class Net(nn.Module):
             a = F.relu(self.blocks[index][0](i))
             a = F.relu(self.blocks[index][1](a))
             block_out[index] = a
+            z = torch.zeros_like(a)
+            z[torch.argmax(a)] = 1.0
+            block_out[index] = z
             current_index = current_index+self.inps[index]
         rc = torch.ravel(torch.tensor(block_out))
         a = F.softmax(F.relu(self.action(rc)), dim=-1)
@@ -383,7 +386,7 @@ class game_space:
                  visuals=False,
                  pulse_zones=False,
                  num_previous_agents=300,
-                 genome_store_size=300,
+                 genome_store_size=500,
                  fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=1.00,
                  rebirth_genome_store=1.00,
@@ -452,30 +455,35 @@ class game_space:
                         "propel_down",
                         "propel_left",
                         ]
-        self.observations = [
-                             #["agents_up",
-                             #"agents_right",
-                             #"agents_down",
-                             #"agents_left",
-                             #"visible_agents"],
-                             ["food_up",
-                             "food_right",
-                             "food_down",
-                             "food_left"],
-                             #"visible_food",
-                             ["protectors_up",
-                             "protectors_right",
-                             "protectors_down",
-                             "protectors_left",
-                             "protector_in_range"],
-                             #"visible_protectors",
-                             ["predators_up",
-                             "predators_right",
-                             "predators_down",
-                             "predators_left"],
-                             #"visible_predators",
-                             #"own_energy",
-                             ]
+        food_obs = ["food_up",
+                    "food_right",
+                    "food_down",
+                    "food_left"]
+        protector_obs = ["protectors_up",
+                         "protectors_right",
+                         "protectors_down",
+                         "protectors_left",
+                         "protector_in_range"]
+        predator_obs = ["predators_up",
+                        "predators_right",
+                        "predators_down",
+                        "predators_left"]
+        agent_obs = ["agents_up",
+                     "agents_right",
+                     "agents_down",
+                     "agents_left"]
+        other_obs = ["visible_agents",
+                     "visible_food",
+                     "visible_protectors",
+                     "visible_predators",
+                     "own_energy"]
+        self.observations = []
+        if self.num_food > 0:
+            self.observations.append(food_obs)
+        if self.num_protectors > 0:
+            self.observations.append(protector_obs)
+        if self.num_predators > 0:
+            self.observations.append(predator_obs)
         self.observation_size = sum([len(x) for x in self.observations])
         self.net_desc = []
         for index, item in enumerate(self.observations):
@@ -631,6 +639,19 @@ class game_space:
             ny -= self.area_size
         if ny < 0:
             ny += self.area_size
+        return nx, ny
+
+    def update_position_bounded(self, xpos, ypos):
+        nx = xpos
+        ny = ypos
+        if nx > self.area_size:
+            nx = self.area_size
+        if nx < 0:
+            nx = 0
+        if ny > self.area_size:
+            ny = self.area_size
+        if ny < 0:
+            ny = 0
         return nx, ny
 
     def viewpoint(self, xpos, ypos, orient, distance):
@@ -1581,16 +1602,18 @@ class game_space:
         if self.integer_weights == False:
             return np.random.uniform(-1*self.weight_range, self.weight_range,num)
         else:
-            return np.random.randint(-1*self.weight_range, self.weight_range+1, num)
+            weights = np.random.randint(-1*self.weight_range, self.weight_range+1, num)
+            new_weights = []
+            for w in weights:
+                if w == 0:
+                    w = np.random.uniform(-0.3, 0.3)
+                new_weights.append(float(w))
+            return new_weights
 
     def make_random_genome(self):
         genome = []
         for size in self.genome_size:
             weights = self.make_weights(size)
-            if self.integer_weights == True:
-                for index in range(len(weights)):
-                    if weights[index] == 0.0:
-                        weights[index] = np.random.uniform(-0.3, 0.3)
             genome.append(weights)
         genome = np.array(genome)
         return genome
@@ -1665,7 +1688,7 @@ class game_space:
                     val = random.uniform(-1*self.weight_range, self.weight_range)
                 else:
                     val = random.randint(-1*self.weight_range, self.weight_range+1)
-                    if val == 0.0:
+                    if val == 0:
                         val = np.random.uniform(-0.3, 0.3)
                 gen[index] = val
             new_genome.append(gen)
@@ -1685,7 +1708,7 @@ class game_space:
                 val = random.uniform(-1*self.weight_range, self.weight_range)
             else:
                 val = random.randint(-1*self.weight_range, self.weight_range+1)
-                if val == 0.0:
+                if val == 0:
                     val = np.random.uniform(-0.3, 0.3)
             cg[index] = val
         new_genome = []
@@ -1767,6 +1790,25 @@ class game_space:
         else:
             return self.make_random_genome()
 
+    def make_gen_str(self, genome):
+        full_gen = []
+        for block in range(len(genome)):
+            gen = genome[block]
+            full_gen.extend(gen)
+        gen_str = str(list(full_gen))
+        return gen_str
+
+    def is_genome_unique(self, genome):
+        genome_strings = set()
+        for index, entry in enumerate(self.genome_store):
+            gen_str = self.make_gen_str(entry[0])
+            genome_strings.add(gen_str)
+        gs = self.make_gen_str(genome)
+        if gs in genome_strings:
+            return False
+        else:
+            return True
+
     def store_genome(self, entry):
         min_fitness = 0
         min_item = 0
@@ -1778,7 +1820,8 @@ class game_space:
         if fitness > self.agent_start_energy and fitness > min_fitness:
             if len(self.genome_store) >= self.genome_store_size:
                 self.genome_store.pop(min_item)
-            self.genome_store.append(entry)
+            if self.is_genome_unique(entry[0]):
+                self.genome_store.append(entry)
 
     def make_new_genome(self, atype):
         if random.random() < self.respawn_genome_store:
@@ -2061,7 +2104,10 @@ else:
 # Record weighs of top_n in genome store after each reset or respawn
 #
 # Genetic diversity paper
+# Do not store the same genome more than once
 #
-# Softmax from each block instead of full action output?
-
+# Results:
+# top_n 1.0, gs_size: 300: reached 400 mean age on step 170,000 ([7, 7, 7])
+# top_n 0.5, gs_size: 300: reached 400 mean age on step 240,000 ([7, 7, 7])
+# top_n 1.0, gs_size: 500: reached 400 mean age on step 240,000 ([7, 7, 7])
 
