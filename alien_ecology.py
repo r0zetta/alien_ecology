@@ -297,8 +297,8 @@ class Agent:
         self.fitness = 0
         self.age = 0
         self.temperature = 20
-        self.inertial_damping = 0.75
-        self.speed = 0.35
+        self.inertial_damping = 0.60
+        self.speed = 0.4
         self.previous_states = deque()
         self.previous_actions = []
         self.previous_positions = deque()
@@ -2459,6 +2459,8 @@ else:
 # Update report
 # 1. reward is sparse
 # 2. episodes take longer as training proceeds
+# Training that happens after the initial boost seems to fall into local optima
+# how to get initial training further towards actual real policies?
 #
 # Anneal top_n as training progresses?
 # Increase gs_size, but only allow unique genomes to be added?
@@ -2470,7 +2472,8 @@ else:
 # Record weighs of top_n in genome store after each reset or respawn
 #
 # Genetic diversity paper
-# Do not store the same genome more than once
+# How to model diversity/novelty in this environment?
+# This is likely what we need to boost beyond slow learning of nothing...
 #
 # Exp 1
 # Predators=6, protectors=3, food=20
