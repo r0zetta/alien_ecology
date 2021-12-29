@@ -371,12 +371,12 @@ class game_space:
                  evolve_by_block=True,
                  integer_weights=True,
                  weight_range=1,
-                 area_size=70,
+                 area_size=50,
                  num_agents=10,
                  agent_start_energy=50,
                  agent_energy_drain=1,
                  agent_view_distance=3,
-                 num_protectors=3,
+                 num_protectors=0,
                  protector_safe_distance=7,
                  num_predators=6,
                  predator_view_distance=4,
@@ -2069,6 +2069,7 @@ if len(sys.argv)>1:
         print_visuals = True
     if "i" or "-i" in sys.argv[1:]:
         inference = True
+        print_visuals = True
 
 savedir = "alien_ecology_save"
 if not os.path.exists(savedir):
@@ -2094,7 +2095,7 @@ if print_visuals == True:
     app.run()
 
 else:
-    gs = game_space(visuals=False, inference=inference)
+    gs = game_space(visuals=False)
     while True:
         gs.step()
 
