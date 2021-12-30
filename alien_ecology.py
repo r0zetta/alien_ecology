@@ -144,7 +144,7 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-2)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=1)
             self.reset()
 
     def num_params(self):
@@ -405,29 +405,29 @@ class game_space:
                  hidden_factor=2,
                  num_recent_actions=1000,
                  learners=0.50,
-                 evaluate_learner_every=10,
+                 evaluate_learner_every=50,
                  mutation_rate=0.0013,
                  evolve_by_block=True,
                  integer_weights=True,
                  weight_range=1,
                  area_size=50,
-                 area_toroid=True,
+                 area_toroid=False,
                  num_agents=10,
-                 agent_start_energy=200,
-                 agent_energy_drain=1,
+                 agent_start_energy=50,
+                 agent_energy_drain=0,
                  agent_view_distance=3,
                  num_protectors=0,
                  protector_safe_distance=7,
-                 num_predators=0,
-                 predator_view_distance=4,
+                 num_predators=6,
+                 predator_view_distance=8,
                  predator_kill_distance=2,
-                 num_shooters=5,
+                 num_shooters=0,
                  shooter_visible_range=20,
                  shoot_cooldown=8,
                  bullet_life=100,
                  bullet_speed=0.35,
                  bullet_radius=0.25,
-                 num_food=10,
+                 num_food=0,
                  use_zones=False,
                  visuals=False,
                  inference=False,
@@ -794,17 +794,7 @@ class game_space:
         return nxv, nyv
 
     def viewpoint_bounded(self, xv, yv):
-        nxv = xv
-        nyv = yv
-        if xv > self.area_size:
-            nxv = self.area_size
-        if xv < 0:
-            nxv = 0
-        if yv > self.area_size:
-            nyv = self.area_size
-        if yv < 0:
-            nyv = 0
-        return nxv, nyv
+        return xv, yv
 
     def get_viewpoint_in_direction(self, index, direction):
         xpos = self.things['agents'][index].xpos
@@ -2155,10 +2145,16 @@ class game_space:
         else:
             return True
 
+    def pop_min_genome_store(self):
+        fitnesses = [x[self.fitness_index] for x in self.genome_store]
+        min_item = np.argmin(fitnesses)
+        self.genome_store.pop(min_item)
+
     def store_genome(self, entry):
-        if (self.spawns - self.last_discovery) > 200:
+        if (self.spawns - self.last_discovery) > 100:
             if len(self.genome_store) == self.genome_store_size:
-                self.genome_store_size += 5
+                for _ in range(5):
+                    self.pop_min_genome_store()
         min_fitness = 0
         min_item = 0
         fitness = entry[self.fitness_index]
