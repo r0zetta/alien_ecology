@@ -401,14 +401,14 @@ class game_space:
                  integer_weights=True,
                  weight_range=1,
                  area_size=50,
-                 area_toroid=True,
+                 area_toroid=False,
                  num_agents=20,
                  agent_start_energy=100,
                  agent_energy_drain=1,
                  agent_view_distance=3,
                  num_protectors=0,
                  protector_safe_distance=7,
-                 num_predators=5,
+                 num_predators=0,
                  predator_view_distance=4,
                  predator_kill_distance=2,
                  num_shooters=8,
@@ -1736,7 +1736,7 @@ class game_space:
                     ls = 0
                 # Handle bounded version - set ls to 0 of bullet hits edge
                 if self.area_toroid == False:
-                    if xpos < 0 or xpos > self.area_size or ypos < 0 or ypos > self.area_size:
+                    if xpos == 0 or xpos == self.area_size or ypos == 0 or ypos == self.area_size:
                         ls = 0
                 if ls < 0:
                     ls = 0
