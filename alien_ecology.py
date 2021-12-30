@@ -198,6 +198,8 @@ class GN_model:
         self.optimizer.zero_grad()
         loss = policy_loss + value_loss
         loss.backward()
+        for param in self.policy.parameters():
+            param.grad.data.clamp(-1, 1)
         self.optimizer.step()
         self.reset()
 
@@ -251,7 +253,7 @@ class Agent:
         self.new_state = None
         self.state = None
         self.entity = None
-        self.trail_length = 3
+        self.trail_length = 0
         self.trail_alphas = [100, 60, 30]
         self.trail_entities = []
         for _ in range(self.trail_length):
@@ -401,9 +403,9 @@ class game_space:
                  integer_weights=True,
                  weight_range=1,
                  area_size=50,
-                 area_toroid=False,
-                 num_agents=20,
-                 agent_start_energy=100,
+                 area_toroid=True,
+                 num_agents=10,
+                 agent_start_energy=200,
                  agent_energy_drain=1,
                  agent_view_distance=3,
                  num_protectors=0,
@@ -411,13 +413,13 @@ class game_space:
                  num_predators=0,
                  predator_view_distance=4,
                  predator_kill_distance=2,
-                 num_shooters=8,
+                 num_shooters=5,
                  shooter_visible_range=20,
                  shoot_cooldown=8,
                  bullet_life=100,
                  bullet_speed=0.35,
-                 bullet_radius=0.20,
-                 num_food=0,
+                 bullet_radius=0.25,
+                 num_food=10,
                  use_zones=False,
                  visuals=False,
                  inference=False,
@@ -440,6 +442,7 @@ class game_space:
         self.deaths = 0
         self.eaten = 0
         self.shot = 0
+        self.last_discovery = 0
         self.num_recent_actions = num_recent_actions
         self.num_previous_agents = num_previous_agents
         self.fitness_index = fitness_index
@@ -578,7 +581,8 @@ class game_space:
                             ['repulsor', mpos, rpos, small, 2.0],
                             ['repulsor', lpos, mpos, small, 2.0],
                             ['repulsor', rpos, mpos, small, 2.0],
-                            ['acceleration', mpos, mpos, bigger, 0.3]]
+                            #['acceleration', mpos, mpos, bigger, 0.3],
+                            ]
         self.spawn_zones()
         self.spawn_food()
         self.previous_agents = deque()
@@ -1207,7 +1211,6 @@ class game_space:
             self.things['agents'][index].age += 1
             xpos = self.things['agents'][index].xpos
             ypos = self.things['agents'][index].ypos
-            # XXX Add reward for eating shooters
             if self.num_shooters > 0:
                 nearby_shooters = self.get_shooters_in_radius(xpos, ypos, 1)
                 if len(nearby_shooters) > 0:
@@ -1255,7 +1258,8 @@ class game_space:
         nx, ny = self.update_position(x2, y2)
         self.things['agents'][index].xpos = nx
         self.things['agents'][index].ypos = ny
-        self.things['agents'][index].previous_positions.popleft()
+        if len(self.things['agents'][index].previous_positions) > 0:
+            self.things['agents'][index].previous_positions.popleft()
         self.things['agents'][index].previous_positions.append([x2, y2, o, e])
 
     def apply_agent_physics(self):
@@ -1573,7 +1577,7 @@ class game_space:
         yabs = self.things['shooters'][index].ypos
         zabs = self.things['shooters'][index].zpos
         s = 1
-        texture = "textures/teal"
+        texture = "textures/yellow"
         self.things['shooters'][index].entity = Entity(model='sphere',
                                               color=color.white,
                                               scale=(s,s,s),
@@ -2135,15 +2139,18 @@ class game_space:
     def is_genome_unique(self, genome):
         genome_strings = set()
         for index, entry in enumerate(self.genome_store):
-            gen_str = self.make_gen_str(entry[0])
+            gen_str = self.full_gen_printable(entry[0])
             genome_strings.add(gen_str)
-        gs = self.make_gen_str(genome)
+        gs = self.full_gen_printable(genome)
         if gs in genome_strings:
             return False
         else:
             return True
 
     def store_genome(self, entry):
+        if (self.spawns - self.last_discovery) > 200:
+            if len(self.genome_store) == self.genome_store_size:
+                self.genome_store_size += 5
         min_fitness = 0
         min_item = 0
         fitness = entry[self.fitness_index]
@@ -2151,16 +2158,23 @@ class game_space:
             fitnesses = [x[self.fitness_index] for x in self.genome_store]
             min_item = np.argmin(fitnesses)
             min_fitness = fitnesses[min_item]
-        if fitness > self.agent_start_energy and fitness > min_fitness:
-            if len(self.genome_store) >= self.genome_store_size:
+            if len(self.genome_store) > self.genome_store_size:
                 self.genome_store.pop(min_item)
+        if fitness > self.agent_start_energy and fitness > min_fitness:
             self.genome_store.append(entry)
+            self.last_discovery = self.spawns
 
     def make_new_genome(self, atype):
         if random.random() < self.respawn_genome_store:
             return self.make_genome_from_store(atype)
         else:
             return self.make_genome_from_previous(atype)
+
+    def full_gen_printable(self, gen):
+        ret = ""
+        for block in gen:
+            ret += self.gen_printable(block)
+        return ret
 
     def gen_printable(self, gen):
         msg = ""
@@ -2451,11 +2465,6 @@ else:
     while True:
         gs.step()
 
-# Inspired my matrix:
-# multiple randomly moving shooters
-# agents die if hit by bullet
-# agents kill shooter if they collide with it and gain energy
-#
 # Update report
 # 1. reward is sparse
 # 2. episodes take longer as training proceeds
@@ -2468,7 +2477,6 @@ else:
 # Predators cause energy drain in a radius instead of eating agents
 #
 # implement num_prev_states into current architecture
-#
 # Record weighs of top_n in genome store after each reset or respawn
 #
 # Genetic diversity paper
@@ -2476,6 +2484,7 @@ else:
 # This is likely what we need to boost beyond slow learning of nothing...
 #
 # Exp 1
+# toroid
 # Predators=6, protectors=3, food=20
 # agents=10, drain=1, start_energy=50
 # respawn_genome_store=1.00
@@ -2489,9 +2498,22 @@ else:
 
 
 # Exp 2
+# bounded
 # shooters=8
-# num_predators=5
 # agents=20, drain=1, start_energy=100
+# respawn_genome_store=1.00
+# gs_size=50
+# top_n=1.0
+# lr = 1e-2
+# mutation_rate=0.0013
+# integer_weights=True
+# evolve_by_block=True
+# hidden_factor = 2.0
+
+# Exp 3
+# toroid
+# shooters=10
+# agents=50, drain=1, start_energy=100
 # respawn_genome_store=1.00
 # gs_size=50
 # top_n=1.0
