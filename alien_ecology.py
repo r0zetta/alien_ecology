@@ -98,7 +98,7 @@ class Net(nn.Module):
             d1 = self.blocks[index][0].weight.data.detach().numpy()
             d1 = np.ravel(d1)
             entry.extend(list(d1))
-            d2 = self.blocks[index][1].weight.detach().numpy()
+            d2 = self.blocks[index][1].weight.data.detach().numpy()
             d2 = np.ravel(d2)
             entry.extend(list(d2))
             entry = np.ravel(entry)
@@ -108,6 +108,13 @@ class Net(nn.Module):
         dv = self.value.weight.data.detach().numpy()
         genome.append(list(np.ravel(dv)))
         return genome
+
+    def clamp_w(self):
+        for index in range(self.num_blocks):
+            self.blocks[index][0].weight.data = torch.clamp(self.blocks[index][0].weight.data, min=-1.0, max=1.0)
+            self.blocks[index][1].weight.data = torch.clamp(self.blocks[index][1].weight.data, min=-1.0, max=1.0)
+        self.action.weight.data = torch.clamp(self.action.weight.data, min=-1.0, max=1.0)
+        self.value.weight.data = torch.clamp(self.value.weight.data, min=-1.0, max=1.0)
 
     def set_w(self, w):
         for index in range(self.num_blocks):
@@ -198,9 +205,10 @@ class GN_model:
         self.optimizer.zero_grad()
         loss = policy_loss + value_loss
         loss.backward()
-        for param in self.policy.parameters():
-            param.grad.data.clamp(-1, 1)
+        #for param in self.policy.parameters():
+        #    param.grad.data.clamp(-1, 1)
         self.optimizer.step()
+        self.policy.clamp_w()
         self.reset()
 
     # Old non-A2C update
@@ -1946,7 +1954,7 @@ class game_space:
         if self.integer_weights == False:
             val = random.uniform(-1*self.weight_range, self.weight_range)
         else:
-            val = random.randint(-1*self.weight_range, self.weight_range+1)
+            val = random.randint(-1*self.weight_range, self.weight_range)
             if val == 0:
                 val = np.random.uniform(-0.1, 0.1)
         return float(val)
