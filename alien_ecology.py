@@ -441,7 +441,7 @@ class game_space:
                  num_predators=0,
                  predator_view_distance=8,
                  predator_kill_distance=2,
-                 num_shooters=0,
+                 num_shooters=3,
                  shooter_visible_range=20,
                  shoot_cooldown=8,
                  bullet_life=100,
@@ -888,8 +888,24 @@ class game_space:
         items = self.get_things_in_direction(ttype, aindex, 'up')
         return len(items)
 
+    def get_things_upleft(self, ttype, aindex):
+        items = self.get_things_in_direction(ttype, aindex, 'upleft')
+        return len(items)
+
+    def get_things_upright(self, ttype, aindex):
+        items = self.get_things_in_direction(ttype, aindex, 'upright')
+        return len(items)
+
     def get_things_down(self, ttype, aindex):
         items = self.get_things_in_direction(ttype, aindex, 'down')
+        return len(items)
+
+    def get_things_downleft(self, ttype, aindex):
+        items = self.get_things_in_direction(ttype, aindex, 'downleft')
+        return len(items)
+
+    def get_things_downright(self, ttype, aindex):
+        items = self.get_things_in_direction(ttype, aindex, 'downright')
         return len(items)
 
     def get_things_left(self, ttype, aindex):
@@ -1732,14 +1748,23 @@ class game_space:
         if 'bullets' not in self.things:
             return
         for index in range(len(self.things['bullets'])):
+            xpos = self.things['bullets'][index].xpos
+            ypos = self.things['bullets'][index].ypos
+            # Bullets are stopped by protector field
+            if 'protectors' in self.things:
+                protectors = self.get_protectors_in_radius(xpos,
+                                                           ypos,
+                                                           self.protector_safe_distance)
+                if len(protectors) > 0:
+                    self.things['bullets'][index].lifespan = 0
+                    if self.visuals == True:
+                        self.things['bullets'][index].entity.disable()
             ls = self.things['bullets'][index].lifespan
             hit = False
             if ls > 0:
                 ls = ls - 1
                 self.update_bullet_position(index)
                 # Check for agents hit
-                xpos = self.things['bullets'][index].xpos
-                ypos = self.things['bullets'][index].ypos
                 victims = self.get_agents_in_radius(xpos, ypos, self.bullet_radius)
                 if len(victims) > 0:
                     hit = True
@@ -2335,6 +2360,12 @@ class game_space:
         self.record_stats("learning agents", l_agents)
         e_agents = len(self.things['agents']) - l_agents
         self.record_stats("evolving agents", l_agents)
+        obs = "--"
+        if len(self.things['agents'][0].previous_states) > 0:
+            obs = self.things['agents'][0].previous_states[0]
+        act = 0
+        if len(self.things['agents'][0].previous_actions) > 0:
+            act = self.things['agents'][0].previous_actions[-1]
 
         msg = ""
         msg += self.print_run_stats()
@@ -2347,6 +2378,11 @@ class game_space:
         msg += "  evolving: " + str(e_agents)
         msg += "\n\n"
         #msg += self.print_new_state_stats()
+        msg += str(obs)
+        msg += "\n"
+        msg += str(act)
+        msg += "\n"
+        msg += "\n"
         msg += self.print_spawn_stats()
         msg += "\n"
         msg += self.make_labels(self.previous_agents, "Previous ", "prev")
