@@ -144,7 +144,7 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=1)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=0.01)
             self.reset()
 
     def num_params(self):
@@ -311,6 +311,8 @@ class Agent:
         self.speed = 0.4
         self.previous_states = deque()
         self.previous_actions = []
+        self.previous_x = []
+        self.previous_y = []
         self.previous_positions = deque()
         for _ in range(self.trail_length):
             self.previous_positions.append([self.xpos, self.ypos, self.orient, self.energy])
@@ -413,8 +415,8 @@ class game_space:
                  area_size=50,
                  area_toroid=False,
                  num_agents=10,
-                 agent_start_energy=50,
-                 agent_energy_drain=0,
+                 agent_start_energy=100,
+                 agent_energy_drain=1,
                  agent_view_distance=3,
                  num_protectors=0,
                  protector_safe_distance=7,
@@ -427,19 +429,19 @@ class game_space:
                  bullet_life=100,
                  bullet_speed=0.35,
                  bullet_radius=0.25,
-                 num_food=0,
+                 num_food=10,
                  use_zones=False,
                  visuals=False,
                  inference=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=50,
-                 fitness_index=2, # 1: fitness, 2: age
+                 genome_store_size=100,
+                 fitness_index=1, # 1: fitness, 2: age
                  respawn_genome_store=1.00,
                  rebirth_genome_store=1.00,
                  top_n=1.0,
                  save_every=5000,
-                 record_every=100,
+                 record_every=200,
                  savedir="alien_ecology_save",
                  statsdir="alien_ecology_stats"):
         self.steps = 1
@@ -504,6 +506,14 @@ class game_space:
         for t in self.agent_types:
             self.agent_actions[t] = Counter()
             self.recent_actions[t] = deque()
+        self.directions = ['up',
+                           'upright',
+                           'right',
+                           'downright',
+                           'down',
+                           'downleft',
+                           'left',
+                           'upleft']
         self.actions = [
                         #"rotate_right",
                         #"rotate_left",
@@ -673,6 +683,10 @@ class game_space:
     def distance(self, x1, y1, x2, y2):
         return math.sqrt(((x1-x2)**2)+((y1-y2)**2))
 
+    def angle(self, x1, y1, x2, y2):
+        angle = ((math.atan2(y2-y1, x2-x1))/math.pi+1)*180
+        return angle
+
     def propel(self, xv, yv, orient, speed):
         xvel = xv
         yvel = yv
@@ -740,89 +754,6 @@ class game_space:
             ny = 0
         return nx, ny
 
-    def viewpoint(self, xpos, ypos, orient, distance):
-        xv = xpos
-        yv = ypos
-        # up
-        if orient == 0:
-            yv = ypos + distance
-        # up right
-        elif orient == 1:
-            yv = ypos + 0.5*distance
-            xv = xpos + 0.5*distance
-        # right
-        elif orient == 2:
-            xv = xpos + distance
-        # down right
-        elif orient == 3:
-            yv = ypos - 0.5*distance
-            xv = xpos + 0.5*distance
-        # down
-        elif orient == 4:
-            yv = ypos - distance
-        # down left
-        elif orient == 5:
-            yv = ypos - 0.5*distance
-            xv = xpos - 0.5*distance
-        # left
-        elif orient == 6:
-            xv = xpos - distance
-        # up left
-        elif orient == 7:
-            yv = ypos + 0.5*distance
-            xv = xpos - 0.5*distance
-        nxv, nyv = self.viewpoint_select(xv, yv)
-        return nxv, nyv
-
-    def viewpoint_select(self, xv, yv):
-        if self.area_toroid == True:
-            return self.viewpoint_toroid(xv, yv)
-        else:
-            return self.viewpoint_bounded(xv, yv)
-
-    def viewpoint_toroid(self, xv, yv):
-        nxv = xv
-        nyv = yv
-        if xv > self.area_size:
-            nxv -= self.area_size
-        if xv < 0:
-            nxv += self.area_size
-        if yv > self.area_size:
-            nyv -= self.area_size
-        if yv < 0:
-            nyv += self.area_size
-        return nxv, nyv
-
-    def viewpoint_bounded(self, xv, yv):
-        return xv, yv
-
-    def get_viewpoint_in_direction(self, index, direction):
-        xpos = self.things['agents'][index].xpos
-        ypos = self.things['agents'][index].ypos
-        distance = self.agent_view_distance
-        xv, yv = self.viewpoint(xpos, ypos, direction, distance)
-        return xv, yv
-
-    def get_viewpoint_up(self, index):
-        return self.get_viewpoint_in_direction(index, 0)
-
-    def get_viewpoint_right(self, index):
-        return self.get_viewpoint_in_direction(index, 2)
-
-    def get_viewpoint_down(self, index):
-        return self.get_viewpoint_in_direction(index, 4)
-
-    def get_viewpoint_left(self, index):
-        return self.get_viewpoint_in_direction(index, 6)
-
-    def get_viewpoint(self, index):
-        xpos = self.things['agents'][index].xpos
-        ypos = self.things['agents'][index].ypos
-        orient = self.things['agents'][index].orient
-        distance = self.agent_view_distance
-        xv, yv = self.viewpoint(xpos, ypos, orient, distance)
-        return xv, yv
-
     def filter_by_distance(self, x1, y1, x2, y2, radius):
         if abs(x1 - x2) <= radius:
             return True
@@ -856,6 +787,42 @@ class game_space:
                 besty = ypos
         return bestx, besty
 
+    def detect_in_direction(self, direction, angle):
+        direction_angles = {'up': [[226, 270], [270, 314]],
+                            'down': [[46, 90], [90, 134]],
+                            'left': [[316, 360], [0, 44]],
+                            'right': [[136, 180], [180, 224]],
+                            'upright':[[181, 225], [225, 269]],
+                            'upleft':[[270, 315], [315, 359]],
+                            'downleft':[[1, 45], [45, 89]],
+                            'downright':[[91, 135], [135, 179]],
+                           }
+        ranges = direction_angles[direction]
+        for r in ranges:
+            l, u = r
+            if angle >= l and angle <= u:
+                return True
+        return False
+
+    def get_things_in_direction_pos(self, x1, y1, distance, ttype, direction):
+        ret = []
+        for i in range(len(self.things[ttype])):
+            x2 = self.things[ttype][i].xpos
+            y2 = self.things[ttype][i].ypos
+            if self.filter_by_distance(x1, y1, x2, y2, distance) is True:
+                angle = self.angle(x1, y1, x2, y2)
+                if self.detect_in_direction(direction, angle) is True:
+                    d = self.distance(x1, y1, x2, y2)
+                    if d <= distance:
+                        ret.append(i)
+        return ret
+
+    def get_things_in_direction(self, ttype, aindex, direction):
+        x1 = self.things['agents'][aindex].xpos
+        y1 = self.things['agents'][aindex].ypos
+        distance = self.agent_view_distance
+        return self.get_things_in_direction_pos(x1, y1, distance, ttype, direction)
+
     def get_things_in_radius(self, ttype, xpos, ypos, radius):
         ret = []
         for i in range(len(self.things[ttype])):
@@ -867,29 +834,25 @@ class game_space:
         return ret
 
     def get_visible_things(self, ttype, aindex):
-        xv, yv = self.get_viewpoint(aindex)
-        ret = self.get_things_in_radius(ttype, xv, yv, self.agent_view_distance*2)
-        return(len(ret))
+        direction = self.directions[orient]
+        items = self.get_things_in_direction(ttype, aindex, direction)
+        return len(items)
 
     def get_things_up(self, ttype, aindex):
-        xv, yv = self.get_viewpoint_up(aindex)
-        ret = self.get_things_in_radius(ttype, xv, yv, self.agent_view_distance)
-        return(len(ret))
-
-    def get_things_right(self, ttype, aindex):
-        xv, yv = self.get_viewpoint_right(aindex)
-        ret = self.get_things_in_radius(ttype, xv, yv, self.agent_view_distance)
-        return(len(ret))
+        items = self.get_things_in_direction(ttype, aindex, 'up')
+        return len(items)
 
     def get_things_down(self, ttype, aindex):
-        xv, yv = self.get_viewpoint_down(aindex)
-        ret = self.get_things_in_radius(ttype, xv, yv, self.agent_view_distance)
-        return(len(ret))
+        items = self.get_things_in_direction(ttype, aindex, 'down')
+        return len(items)
 
     def get_things_left(self, ttype, aindex):
-        xv, yv = self.get_viewpoint_left(aindex)
-        ret = self.get_things_in_radius(ttype, xv, yv, self.agent_view_distance)
-        return(len(ret))
+        items = self.get_things_in_direction(ttype, aindex, 'left')
+        return len(items)
+
+    def get_things_right(self, ttype, aindex):
+        items = self.get_things_in_direction(ttype, aindex, 'right')
+        return len(items)
 
     def get_adjacent_thing_indices(self, ttype, aindex):
         xpos = self.things['agents'][aindex].xpos
@@ -1059,8 +1022,12 @@ class game_space:
 
     def run_agent_actions(self):
         for n in range(len(self.things['agents'])):
+            xpos = self.things['agents'][n].xpos
+            ypos = self.things['agents'][n].ypos
             action = int(self.things['agents'][n].get_action())
             self.things['agents'][n].previous_actions.append(action)
+            self.things['agents'][n].previous_x.append(int(xpos))
+            self.things['agents'][n].previous_y.append(int(ypos))
             atype = 0
             if self.things['agents'][n].learnable == True:
                 atype = 1
@@ -1149,10 +1116,12 @@ class game_space:
     def store_agent_entry(self, index):
             l = int(self.things['agents'][index].learnable)
             ae = self.entropy(self.things['agents'][index].previous_actions)
+            ex = self.entropy(self.things['agents'][index].previous_x)
+            ey = self.entropy(self.things['agents'][index].previous_y)
             a = self.things['agents'][index].age
-            h = self.things['agents'][index].happiness + ae*100
+            h = self.things['agents'][index].happiness + ae*50 + ex*50 + ey*50
             d = self.things['agents'][index].distance_travelled
-            f = a + h + d
+            f = a + h
             g = self.things['agents'][index].model.get_w()
             entry = [g, f, a, h, d, l]
             self.store_genome(entry)
@@ -1163,9 +1132,16 @@ class game_space:
         for index in reset:
             entry = self.store_agent_entry(index)
             ae = self.entropy(self.things['agents'][index].previous_actions)
-            a = self.things['agents'][index].age
+            ex = self.entropy(self.things['agents'][index].previous_x)
+            ey = self.entropy(self.things['agents'][index].previous_y)
+            f = entry[self.fitness_index]
             if len(self.things['agents'][index].model.rewards) > 0:
-                reward = ((a-self.agent_start_energy)/self.agent_start_energy) + (ae*0.1)
+                gsfm = 0.0
+                if len(self.genome_store) > 0:
+                    gsfm = np.mean([x[self.fitness_index] for x in self.genome_store]) * 0.75
+                measure = max(gsfm, self.agent_start_energy)
+                reward = ((f-measure)/measure) + (ae*0.1) + (ex*0.1) + (ey*0.1)
+                reward = max(0, reward)
                 reward += self.things['agents'][index].model.rewards[-1]
                 reward = np.float32(reward)
                 self.things['agents'][index].model.rewards[-1] = reward
@@ -1214,9 +1190,9 @@ class game_space:
                 if len(nearby_shooters) > 0:
                     fi = random.choice(nearby_shooters)
                     self.respawn_shooter(fi)
-                    self.things['agents'][index].energy += 50
-                    self.things['agents'][index].happiness += 10
-                    # Reward learning agents for eating food
+                    self.things['agents'][index].energy += 100
+                    self.things['agents'][index].happiness += 100
+                    # Reward learning agents for eating shooter
                     if len(self.things['agents'][index].model.rewards) > 0:
                         self.things['agents'][index].model.rewards[-1] = np.float32(1.0)
             if self.num_food > 0:
@@ -1225,7 +1201,7 @@ class game_space:
                     fi = random.choice(nearby_food)
                     self.respawn_food(fi)
                     self.things['agents'][index].energy += 50
-                    self.things['agents'][index].happiness += 10
+                    self.things['agents'][index].happiness += 50
                     # Reward learning agents for eating food
                     if len(self.things['agents'][index].model.rewards) > 0:
                         self.things['agents'][index].model.rewards[-1] = np.float32(1.0)
@@ -1268,8 +1244,6 @@ class game_space:
         self.things['agents'][index].prev_action = action
         agent_function = "action_" + self.actions[action]
         class_method = getattr(self, agent_function)
-        if self.things['agents'][index].xvel == 0 and self.things['agents'][index].yvel == 0:
-            self.things['agents'][index].happiness -= 1
         reward = class_method(index)
         if self.things['agents'][index].learnable == True:
             self.things['agents'][index].model.record_reward(reward)
@@ -1557,10 +1531,9 @@ class game_space:
                 self.apply_inertial_damping('predators', index)
             else:
                 orient = self.things['predators'][index].orient
+                direction = self.directions[orient]
                 distance = self.predator_view_distance
-                xv, yv = self.viewpoint(xpos, ypos, orient, distance)
-                # If agents in viewfield, move forward
-                targets = self.get_agents_in_radius(xv, yv, distance)
+                targets = self.get_things_in_direction_pos(xpos, ypos, distance, 'agents', direction)
                 if len(targets) > 0:
                     self.propel_thing('predators', index)
                 else:
@@ -2474,6 +2447,7 @@ else:
 # 2. episodes take longer as training proceeds
 # Training that happens after the initial boost seems to fall into local optima
 # how to get initial training further towards actual real policies?
+# improve the entropy calculation of locations visited
 #
 # Anneal top_n as training progresses?
 # Increase gs_size, but only allow unique genomes to be added?
@@ -2485,45 +2459,3 @@ else:
 #
 # Genetic diversity paper
 # How to model diversity/novelty in this environment?
-# This is likely what we need to boost beyond slow learning of nothing...
-#
-# Exp 1
-# toroid
-# Predators=6, protectors=3, food=20
-# agents=10, drain=1, start_energy=50
-# respawn_genome_store=1.00
-# gs_size=50
-# top_n=1.0
-# lr = 1e-2
-# mutation_rate=0.0013 == 378@16000
-# integer_weights=True
-# evolve_by_block=True
-# hidden_factor = 2.0
-
-
-# Exp 2
-# bounded
-# shooters=8
-# agents=20, drain=1, start_energy=100
-# respawn_genome_store=1.00
-# gs_size=50
-# top_n=1.0
-# lr = 1e-2
-# mutation_rate=0.0013
-# integer_weights=True
-# evolve_by_block=True
-# hidden_factor = 2.0
-
-# Exp 3
-# toroid
-# shooters=10
-# agents=50, drain=1, start_energy=100
-# respawn_genome_store=1.00
-# gs_size=50
-# top_n=1.0
-# lr = 1e-2
-# mutation_rate=0.0013
-# integer_weights=True
-# evolve_by_block=True
-# hidden_factor = 2.0
-
