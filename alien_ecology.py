@@ -158,7 +158,7 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=0.07)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=0.06)
             self.reset()
 
     def num_params(self):
@@ -275,6 +275,7 @@ class Agent:
         self.new_state = None
         self.state = None
         self.entity = None
+        self.radius_entity = None
         self.trail_length = 0
         self.trail_alphas = [100, 60, 30]
         self.trail_entities = []
@@ -421,22 +422,23 @@ class Zone:
 class game_space:
     def __init__(self,
                  hidden_factor=2,
+                 out_cat_hidden=1,
                  num_recent_actions=1000,
                  learners=0.50,
                  evaluate_learner_every=30,
-                 mutation_rate=0.0013,
+                 mutation_rate=0.0020,
                  evolve_by_block=True,
                  integer_weights=True,
                  weight_range=1,
                  area_size=50,
-                 area_toroid=False,
+                 area_toroid=True,
                  num_agents=10,
                  agent_start_energy=100,
                  agent_energy_drain=1,
-                 agent_view_distance=3,
-                 num_protectors=0,
+                 agent_view_distance=12,
+                 num_protectors=3,
                  protector_safe_distance=7,
-                 num_predators=6,
+                 num_predators=0,
                  predator_view_distance=8,
                  predator_kill_distance=2,
                  num_shooters=0,
@@ -445,7 +447,7 @@ class game_space:
                  bullet_life=100,
                  bullet_speed=0.35,
                  bullet_radius=0.25,
-                 num_food=10,
+                 num_food=0,
                  use_zones=False,
                  visuals=False,
                  inference=False,
@@ -455,8 +457,6 @@ class game_space:
                  fitness_index=1, # 1: fitness, 2: age
                  respawn_genome_store=1.00,
                  rebirth_genome_store=1.00,
-                 top_n=1.0,
-                 random_genome_chance=0.001,
                  save_every=5000,
                  record_every=200,
                  savedir="alien_ecology_save"):
@@ -475,8 +475,6 @@ class game_space:
         self.respawn_genome_store = respawn_genome_store
         self.rebirth_genome_store = rebirth_genome_store
         self.genome_store_size = genome_store_size
-        self.top_n = top_n
-        self.random_genome_chance = random_genome_chance
         self.learners = learners
         self.evaluate_learner_every = evaluate_learner_every
         self.mutation_rate = mutation_rate
@@ -495,6 +493,7 @@ class game_space:
         self.save_every = save_every
         self.num_prev_states = 1
         self.hidden_factor = hidden_factor
+        self.out_cat_hidden = out_cat_hidden
         self.area_size = area_size
         self.area_toroid = area_toroid
         self.num_agents = num_agents
@@ -643,7 +642,7 @@ class game_space:
             self.net_desc[index].append(self.action_size)
         state_size = sum([x[0] for x in self.net_desc])
         out_cat = sum([x[-1] for x in self.net_desc])
-        out_hidden = int(out_cat*0.5)
+        out_hidden = int(out_cat*self.out_cat_hidden)
         for item in self.net_desc:
             gs = 0
             for i in range(len(item)-1):
@@ -841,7 +840,34 @@ class game_space:
         x1 = self.things['agents'][aindex].xpos
         y1 = self.things['agents'][aindex].ypos
         distance = self.agent_view_distance
-        return self.get_things_in_direction_pos(x1, y1, distance, ttype, direction)
+        t1 = self.get_things_in_direction_pos(x1, y1, distance, ttype, direction)
+        # If the agent is facing and close to boundary, and toroid mode is on
+        # get things from the other side
+        if self.area_toroid == True:
+            xn = None
+            yn = None
+            if (y1 + distance) > self.area_size:
+                if direction in ['up', 'upleft', 'upright']:
+                    yn = y1 - self.area_size
+            if (y1 - distance) < 0:
+                if direction in ['down', 'downleft', 'downright']:
+                    yn = y1 + self.area_size
+            if (x1 + distance) > self.area_size:
+                if direction in ['right', 'upright', 'downright']:
+                    xn = x1 - self.area_size
+            if (x1 - distance) < 0:
+                if direction == ['left', 'upleft', 'downleft']:
+                    xn = x1 + self.area_size
+            if xn is not None:
+                if yn is None:
+                    yn = y1
+            if yn is not None:
+                if xn is None:
+                    xn = x1
+            if xn is not None and yn is not None:
+                t2 = self.get_things_in_direction_pos(xn, yn, distance, ttype, direction)
+                t1.extend(t2)
+        return t1
 
     def get_things_in_radius(self, ttype, xpos, ypos, radius):
         ret = []
@@ -983,6 +1009,11 @@ class game_space:
                                            scale=(s,s,s),
                                            position = (xabs, yabs, zabs),
                                            texture=texture)
+        s = self.agent_view_distance * 2
+        self.things['agents'][index].radius_entity = Entity(model='sphere',
+                                                          color=color.rgba(128,128,128,10),
+                                                          scale=(s,s,s),
+                                                          position = (xabs, yabs, zabs))
         for n in range(self.things['agents'][index].trail_length):
             item = self.things['agents'][index].previous_positions[n]
             x, y, o, ss = item
@@ -1112,29 +1143,19 @@ class game_space:
                 #with open(self.savedir + "/agent_" + str(index) + "_weights.pkl", "wb") as f:
                     #f.write(pickle.dumps(prev_w))
                 self.things['agents'][index].previous_weights = []
-            if random.random() < self.rebirth_genome_store:
-                method = 1
-            if method == 1:
-                if len(self.genome_store) > 1:
-                    pfm = np.mean([x[self.fitness_index] for x in self.genome_store])
-            else:
-                if len(self.previous_agents) > 1:
-                    pfm = np.mean([x[self.fitness_index] for x in self.previous_agents])
+            if len(self.genome_store) > 1:
+                pfm = np.mean([x[self.fitness_index] for x in self.genome_store])
             self.things['agents'][index].previous_stats = []
             if pfm > 0:
                 if mpf < pfm * 0.75:
                     g = None
-                    if method == 1:
-                        num_g = min(len(self.genome_store), int(self.genome_store_size * self.top_n))
+                    num_g = len(self.genome_store)
+                    if num_g > 0:
                         g = random.choice(self.get_best_genomes_from_store(num_g, None))
-                    else:
-                        num_g = min(len(self.previous_agents), int(self.num_previous_agents * self.top_n))
-                        g = random.choice(self.get_best_previous_genomes(num_g, None))
-                    if g is not None:
-                        if random.random() < self.random_genome_chance:
-                            g = self.make_random_genome()
-                        self.things['agents'][index].set_genome(g)
-                        self.rebirths += 1
+                    if g is None:
+                        g = self.make_random_genome()
+                    self.things['agents'][index].set_genome(g)
+                    self.rebirths += 1
                 else:
                     self.continuations += 1
             else:
@@ -1197,12 +1218,9 @@ class game_space:
             self.things['agents'][index].ypos = ypos
             genome = entry[0]
             if self.inference == False:
-                if random.random() < self.random_genome_chance:
-                    genome = self.make_random_genome()
-                else:
-                    genome = self.make_new_genome(0)
+                genome = self.make_new_genome(0)
             else:
-                num_g = min(len(self.genome_store), int(self.genome_store_size * self.top_n))
+                num_g = len(self.genome_store)
                 if num_g > 0:
                     genome = random.choice(self.get_best_genomes_from_store(num_g, None))
             self.things['agents'][index].set_genome(genome)
@@ -2090,9 +2108,7 @@ class game_space:
     def make_genome_from_previous(self, atype):
         if len(self.previous_agents) < 1:
             return self.make_random_genome()
-        num_g = int(self.num_previous_agents * self.top_n)
-        if len(self.previous_agents) < num_g:
-            num_g = len(self.previous_agents)
+        num_g = len(self.previous_agents)
         genomes = self.get_best_previous_genomes(num_g, atype)
         if len(genomes) > 1:
             return self.make_new_offspring(genomes)
@@ -2120,9 +2136,7 @@ class game_space:
     def make_genome_from_store(self, atype):
         if len(self.genome_store) < 1:
             return self.make_random_genome()
-        num_g = int(self.genome_store_size * self.top_n)
-        if len(self.genome_store) < num_g:
-            num_g = len(self.genome_store)
+        num_g = len(self.genome_store)
         genomes = self.get_best_genomes_from_store(num_g, atype)
         if len(genomes) > 1:
             return self.make_new_offspring(genomes)
@@ -2368,6 +2382,7 @@ def update():
             s = 0.5 + ((gs.things['agents'][index].energy/200)*0.5)
             gs.things['agents'][index].entity.scale = (s,s,s)
             gs.things['agents'][index].entity.position = (xabs, yabs, zabs)
+            gs.things['agents'][index].radius_entity.position = (xabs, yabs, zabs)
             orient = gs.things['agents'][index].orient
             gs.things['agents'][index].entity.rotation = (45*orient, 90, 0)
             for n in range(gs.things['agents'][index].trail_length):
@@ -2473,14 +2488,9 @@ else:
 # 2. episodes take longer as training proceeds
 # Training that happens after the initial boost seems to fall into local optima
 # how to get initial training further towards actual real policies?
-# Idea:
-# Track trajectories of weight changes in learning agents and extrapolate their
-# outcomes (i.e., if a weight is decreasing below zero, push it to -1)
+# How to model diversity/novelty in this environment?
 # improve the entropy calculation of locations visited
 #
 # Predators cause energy drain in a radius instead of eating agents
 #
 # implement num_prev_states into current architecture
-#
-# Genetic diversity paper
-# How to model diversity/novelty in this environment?
