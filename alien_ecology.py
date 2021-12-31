@@ -158,7 +158,7 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=0.06)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=0.1)
             self.reset()
 
     def num_params(self):
@@ -421,12 +421,12 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 hidden_factor=2,
-                 out_cat_hidden=1,
+                 block_hidden_factor=2,
+                 out_cat_hidden_factor=2,
                  num_recent_actions=1000,
                  learners=0.50,
-                 evaluate_learner_every=30,
-                 mutation_rate=0.0020,
+                 evaluate_learner_every=50,
+                 mutation_rate=0.00, # auto-set if this is zero
                  evolve_by_block=True,
                  integer_weights=True,
                  weight_range=1,
@@ -436,12 +436,12 @@ class game_space:
                  agent_start_energy=100,
                  agent_energy_drain=1,
                  agent_view_distance=12,
-                 num_protectors=3,
+                 num_protectors=2,
                  protector_safe_distance=7,
-                 num_predators=0,
+                 num_predators=6,
                  predator_view_distance=8,
                  predator_kill_distance=2,
-                 num_shooters=3,
+                 num_shooters=0,
                  shooter_visible_range=20,
                  shoot_cooldown=8,
                  bullet_life=100,
@@ -454,7 +454,7 @@ class game_space:
                  pulse_zones=False,
                  num_previous_agents=100,
                  genome_store_size=100,
-                 fitness_index=1, # 1: fitness, 2: age
+                 fitness_index=2, # 1: fitness, 2: age
                  respawn_genome_store=1.00,
                  rebirth_genome_store=1.00,
                  save_every=5000,
@@ -492,8 +492,8 @@ class game_space:
         self.record_every = record_every
         self.save_every = save_every
         self.num_prev_states = 1
-        self.hidden_factor = hidden_factor
-        self.out_cat_hidden = out_cat_hidden
+        self.block_hidden_factor = block_hidden_factor
+        self.out_cat_hidden_factor = out_cat_hidden_factor
         self.area_size = area_size
         self.area_toroid = area_toroid
         self.num_agents = num_agents
@@ -534,11 +534,12 @@ class game_space:
                         #"rotate_left",
                         #"flip",
                         #"propel",
-                        "null",
                         "propel_up",
                         "propel_right",
                         "propel_down",
                         "propel_left",
+                        #"null",
+                        #"move_random",
                         ]
         bullet_obs = ["bullets_up",
                       "bullets_right",
@@ -590,12 +591,15 @@ class game_space:
         self.net_desc = []
         for index, item in enumerate(self.observations):
             obs = len(self.observations[index])
-            hidden = int(obs*self.hidden_factor)
+            hidden = int(obs*self.block_hidden_factor)
             entry = [obs, hidden]
             self.net_desc.append(entry)
         self.action_size = len(self.actions)
         self.genome_size = []
         self.make_genome_size()
+        if self.mutation_rate == 0:
+            params = sum([x for x in self.genome_size])
+            self.mutation_rate = 1/(params*2)
         self.genome_store = []
         self.things = {}
         self.zone_types = ['attractor', 'repulsor', 'damping', 'acceleration']
@@ -642,7 +646,7 @@ class game_space:
             self.net_desc[index].append(self.action_size)
         state_size = sum([x[0] for x in self.net_desc])
         out_cat = sum([x[-1] for x in self.net_desc])
-        out_hidden = int(out_cat*self.out_cat_hidden)
+        out_hidden = int(self.action_size*self.out_cat_hidden_factor)
         for item in self.net_desc:
             gs = 0
             for i in range(len(item)-1):
@@ -1201,11 +1205,13 @@ class game_space:
             f = entry[self.fitness_index]
             if len(self.things['agents'][index].model.rewards) > 0:
                 gsfm = 0.0
-                if len(self.genome_store) > 0:
+                if len(self.genome_store) > (self.genome_store_size*0.75):
                     gsfm = np.mean([x[self.fitness_index] for x in self.genome_store]) * 0.75
-                measure = max(gsfm, self.agent_start_energy)
-                reward = ((f-measure)/measure) + (ae*0.1) + (ex*0.1) + (ey*0.1)
-                reward = max(0, reward)
+                #measure = max(gsfm, self.agent_start_energy)
+                measure = self.agent_start_energy
+                reward = ((f-measure)/measure) + (ae*0.033) + (ex*0.033) + (ey*0.033)
+                print(reward)
+                #reward = min(1, max(-1, reward))
                 reward += self.things['agents'][index].model.rewards[-1]
                 reward = np.float32(reward)
                 self.things['agents'][index].model.rewards[-1] = reward
@@ -1341,6 +1347,11 @@ class game_space:
 
     def action_propel_left(self, index):
         return self.propel_thing_left('agents', index)
+
+    def action_move_random(self, index):
+        choices = [0, 1, 2, 3]
+        action = random.choice(choices)
+        return self.apply_agent_action(index, action)
 
 # Agent observations
     def make_new_state(self, index):
@@ -2355,17 +2366,26 @@ class game_space:
         msg += "\n"
         return msg
 
-    def get_stats(self):
-        l_agents = sum([x.learnable for x in self.things['agents']])
-        self.record_stats("learning agents", l_agents)
-        e_agents = len(self.things['agents']) - l_agents
-        self.record_stats("evolving agents", l_agents)
+    def print_observations(self):
         obs = "--"
         if len(self.things['agents'][0].previous_states) > 0:
             obs = self.things['agents'][0].previous_states[0]
         act = 0
         if len(self.things['agents'][0].previous_actions) > 0:
             act = self.things['agents'][0].previous_actions[-1]
+        msg = ""
+        msg += str(obs)
+        msg += "\n"
+        msg += str(act)
+        msg += "\n"
+        msg += "\n"
+        return msg
+
+    def get_stats(self):
+        l_agents = sum([x.learnable for x in self.things['agents']])
+        self.record_stats("learning agents", l_agents)
+        e_agents = len(self.things['agents']) - l_agents
+        self.record_stats("evolving agents", l_agents)
 
         msg = ""
         msg += self.print_run_stats()
@@ -2376,13 +2396,10 @@ class game_space:
         msg += "Agents: " + str(len(self.things['agents']))
         msg += "  learning: " + str(l_agents)
         msg += "  evolving: " + str(e_agents)
+        msg += "  mutation rate: " + "%.5f"%self.mutation_rate
         msg += "\n\n"
         #msg += self.print_new_state_stats()
-        msg += str(obs)
-        msg += "\n"
-        msg += str(act)
-        msg += "\n"
-        msg += "\n"
+        #msg += self.print_observations()
         msg += self.print_spawn_stats()
         msg += "\n"
         msg += self.make_labels(self.previous_agents, "Previous ", "prev")
