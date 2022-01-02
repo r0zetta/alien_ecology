@@ -421,7 +421,7 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 block_hidden_factor=1,
+                 block_hidden_factor=2,
                  out_cat_hidden_factor=2,
                  num_recent_actions=1000,
                  learners=0.50,
@@ -566,12 +566,17 @@ class game_space:
                         "boundary_right",
                         "boundary_down",
                         "boundary_left"]
+        location_obs = ["agent_xpos",
+                        "agent_ypos",
+                        "agent_xvel",
+                        "agent_yvel"]
         other_obs = ["visible_agents",
                      "visible_food",
                      "visible_protectors",
                      "visible_predators",
                      "own_energy"]
         self.observations = []
+        self.observations.append(location_obs)
         if self.area_toroid == False:
             self.observations.append(boundary_obs)
         if self.num_food > 0:
@@ -1388,6 +1393,17 @@ class game_space:
     def get_own_energy(self, index):
         return self.things['agents'][index].energy/self.agent_start_energy
 
+    def get_agent_xpos(self, index):
+        return self.things['agents'][index].xpos/self.area_size
+
+    def get_agent_ypos(self, index):
+        return self.things['agents'][index].ypos/self.area_size
+
+    def get_agent_xvel(self, index):
+        return self.things['agents'][index].xvel
+
+    def get_agent_yvel(self, index):
+        return self.things['agents'][index].yvel
 ###################
 # Protector actions
 ###################
