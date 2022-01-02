@@ -828,7 +828,11 @@ class game_space:
                             'downleft':[[1, 45], [45, 89]],
                             'downright':[[91, 135], [135, 179]],
                            }
-        ranges = direction_angle1[direction]
+        direction_angles = direction_angle2
+        if len(self.obs_directions) > 4:
+            direction_angles = direction_angle1
+
+        ranges = direction_angles[direction]
         for r in ranges:
             l, u = r
             if angle >= l and angle <= u:
