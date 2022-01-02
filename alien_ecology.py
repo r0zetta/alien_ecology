@@ -421,7 +421,7 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 block_hidden_factor=2,
+                 block_hidden_factor=1,
                  out_cat_hidden_factor=2,
                  num_recent_actions=1000,
                  learners=0.50,
@@ -431,23 +431,23 @@ class game_space:
                  integer_weights=True,
                  weight_range=1,
                  area_size=50,
-                 area_toroid=True,
+                 area_toroid=False,
                  num_agents=10,
                  agent_start_energy=100,
                  agent_energy_drain=1,
                  agent_view_distance=12,
-                 num_protectors=2,
+                 num_protectors=0,
                  protector_safe_distance=7,
-                 num_predators=3,
+                 num_predators=0,
                  predator_view_distance=8,
                  predator_kill_distance=2,
-                 num_shooters=5,
+                 num_shooters=0,
                  shooter_visible_range=20,
                  shoot_cooldown=8,
                  bullet_life=100,
                  bullet_speed=0.35,
                  bullet_radius=0.25,
-                 num_food=0,
+                 num_food=10,
                  use_zones=False,
                  visuals=False,
                  inference=False,
@@ -898,38 +898,6 @@ class game_space:
     def get_visible_things(self, ttype, aindex):
         direction = self.directions[orient]
         items = self.get_things_in_direction(ttype, aindex, direction)
-        return len(items)
-
-    def get_things_up(self, ttype, aindex):
-        items = self.get_things_in_direction(ttype, aindex, 'up')
-        return len(items)
-
-    def get_things_upleft(self, ttype, aindex):
-        items = self.get_things_in_direction(ttype, aindex, 'upleft')
-        return len(items)
-
-    def get_things_upright(self, ttype, aindex):
-        items = self.get_things_in_direction(ttype, aindex, 'upright')
-        return len(items)
-
-    def get_things_down(self, ttype, aindex):
-        items = self.get_things_in_direction(ttype, aindex, 'down')
-        return len(items)
-
-    def get_things_downleft(self, ttype, aindex):
-        items = self.get_things_in_direction(ttype, aindex, 'downleft')
-        return len(items)
-
-    def get_things_downright(self, ttype, aindex):
-        items = self.get_things_in_direction(ttype, aindex, 'downright')
-        return len(items)
-
-    def get_things_left(self, ttype, aindex):
-        items = self.get_things_in_direction(ttype, aindex, 'left')
-        return len(items)
-
-    def get_things_right(self, ttype, aindex):
-        items = self.get_things_in_direction(ttype, aindex, 'right')
         return len(items)
 
     def get_adjacent_thing_indices(self, ttype, aindex):
@@ -1411,7 +1379,7 @@ class game_space:
                 m2 = m.group(2)
                 if m1 in self.ttypes and m2 in self.obs_directions:
                     val = len(self.get_things_in_direction(m1, index, m2))
-            else:
+            if val is None:
                 class_method = getattr(self, fn)
                 val = class_method(index)
             observations.append(val)
