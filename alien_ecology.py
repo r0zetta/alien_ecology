@@ -2108,10 +2108,6 @@ class game_space:
         self.genome_store.pop(min_item)
 
     def store_genome(self, entry):
-        if (self.spawns - self.last_discovery) > 100:
-            if len(self.genome_store) == self.genome_store_size:
-                for _ in range(5):
-                    self.pop_min_genome_store()
         min_fitness = 0
         min_item = 0
         fitness = entry[self.fitness_index]
