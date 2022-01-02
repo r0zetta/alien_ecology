@@ -438,10 +438,10 @@ class game_space:
                  agent_view_distance=12,
                  num_protectors=2,
                  protector_safe_distance=7,
-                 num_predators=6,
+                 num_predators=3,
                  predator_view_distance=8,
                  predator_kill_distance=2,
-                 num_shooters=0,
+                 num_shooters=5,
                  shooter_visible_range=20,
                  shoot_cooldown=8,
                  bullet_life=100,
@@ -529,6 +529,14 @@ class game_space:
                            'downleft',
                            'left',
                            'upleft']
+        self.obs_directions = ['up',
+                               'upright',
+                               'right',
+                               'downright',
+                               'down',
+                               'downleft',
+                               'left',
+                               'upleft']
         self.actions = [
                         #"rotate_right",
                         #"rotate_left",
@@ -541,35 +549,23 @@ class game_space:
                         #"null",
                         #"move_random",
                         ]
-        bullet_obs = ["bullets_up",
-                      "bullets_right",
-                      "bullets_down",
-                      "bullets_left"]
-        shooter_obs = ["shooters_up",
-                       "shooters_right",
-                       "shooters_down",
-                       "shooters_left"]
+        self.ttypes = ["agents",
+                       "bullets",
+                       "shooters",
+                       "food",
+                       "predators",
+                       "protectors"]
+        bullet_obs = ["bullets_"+x for x in self.obs_directions]
+        shooter_obs = ["shooters_"+x for x in self.obs_directions]
+        food_obs = ["food_"+x for x in self.obs_directions]
+        protector_obs = ["protectors_"+x for x in self.obs_directions]
+        protector_obs.append("protector_in_range")
+        predator_obs = ["predators_"+x for x in self.obs_directions]
+        agent_obs = ["agent_"+x for x in self.obs_directions]
         boundary_obs = ["boundary_up",
                         "boundary_right",
                         "boundary_down",
                         "boundary_left"]
-        food_obs = ["food_up",
-                    "food_right",
-                    "food_down",
-                    "food_left"]
-        protector_obs = ["protectors_up",
-                         "protectors_right",
-                         "protectors_down",
-                         "protectors_left",
-                         "protector_in_range"]
-        predator_obs = ["predators_up",
-                        "predators_right",
-                        "predators_down",
-                        "predators_left"]
-        agent_obs = ["agents_up",
-                     "agents_right",
-                     "agents_down",
-                     "agents_left"]
         other_obs = ["visible_agents",
                      "visible_food",
                      "visible_protectors",
@@ -811,7 +807,19 @@ class game_space:
         return bestx, besty
 
     def detect_in_direction(self, direction, angle):
-        direction_angles = {'up': [[226, 270], [270, 314]],
+        # All 8 directions have their own angle range
+        direction_angle1 = {'up': [[248, 270], [270, 292]],
+                            'down': [[68, 90], [90, 112]],
+                            'left': [[338, 0], [0, 22]],
+                            'right': [[158, 180], [180, 202]],
+                            'upright': [[203, 225], [225, 247]],
+                            'upleft': [[293, 315], [315, 337]],
+                            'downleft': [[23, 45], [45, 67]],
+                            'downright': [[113, 135], [135, 157]],
+                            }
+
+        # Overlap between angle ranges
+        direction_angle2 = {'up': [[226, 270], [270, 314]],
                             'down': [[46, 90], [90, 134]],
                             'left': [[316, 360], [0, 44]],
                             'right': [[136, 180], [180, 224]],
@@ -820,7 +828,7 @@ class game_space:
                             'downleft':[[1, 45], [45, 89]],
                             'downright':[[91, 135], [135, 179]],
                            }
-        ranges = direction_angles[direction]
+        ranges = direction_angle1[direction]
         for r in ranges:
             l, u = r
             if angle >= l and angle <= u:
@@ -1109,30 +1117,6 @@ class game_space:
     def get_agents_in_radius(self, xpos, ypos, radius):
         return self.get_things_in_radius('agents', xpos, ypos, radius)
 
-    def get_visible_agents(self, aindex):
-        return self.get_visible_things('agents', aindex)
-
-    def get_agents_up(self, aindex):
-        return self.get_things_up('agents', aindex)
-
-    def get_agents_down(self, aindex):
-        return self.get_things_down('agents', aindex)
-
-    def get_agents_right(self, aindex):
-        return self.get_things_right('agents', aindex)
-
-    def get_agents_left(self, aindex):
-        return self.get_things_left('agents', aindex)
-
-    def get_adjacent_agent_indices(self, aindex):
-        return self.get_adjacent_agent_indices('agents', aindex)
-
-    def get_adjacent_agent_count(self, aindex):
-        return self.get_adjacent_thing_count('agents', aindex)
-
-    def get_nearest_agent(self, aindex):
-        return self.get_nearest_thing('agents', aindex)
-
     def get_boundary_up(self, aindex):
         if (self.things['agents'][aindex].ypos + self.agent_view_distance) >= self.area_size:
             return 1
@@ -1209,8 +1193,7 @@ class game_space:
                     gsfm = np.mean([x[self.fitness_index] for x in self.genome_store]) * 0.75
                 #measure = max(gsfm, self.agent_start_energy)
                 measure = self.agent_start_energy
-                reward = ((f-measure)/measure) + (ae*0.033) + (ex*0.033) + (ey*0.033)
-                print(reward)
+                reward = ((f-measure)/measure) + (ae*0.033) + (ex*0.033) + (ey*0.033) - 0.5
                 #reward = min(1, max(-1, reward))
                 reward += self.things['agents'][index].model.rewards[-1]
                 reward = np.float32(reward)
@@ -1417,8 +1400,16 @@ class game_space:
                 function_names.append("get_" + n)
         observations = []
         for fn in function_names:
-            class_method = getattr(self, fn)
-            val = class_method(index)
+            m = re.match("get_([a-z]+)_([a-z]+)$", fn)
+            val = None
+            if m is not None:
+                m1 = m.group(1)
+                m2 = m.group(2)
+                if m1 in self.ttypes and m2 in self.obs_directions:
+                    val = len(self.get_things_in_direction(m1, index, m2))
+            else:
+                class_method = getattr(self, fn)
+                val = class_method(index)
             observations.append(val)
         return observations
 
@@ -1476,21 +1467,6 @@ class game_space:
     def get_protectors_in_radius(self, xpos, ypos, radius):
         return self.get_things_in_radius('protectors', xpos, ypos, radius)
 
-    def get_visible_protectors(self, aindex):
-        return self.get_visible_things('protectors', aindex)
-
-    def get_protectors_up(self, aindex):
-        return self.get_things_up('protectors', aindex)
-
-    def get_protectors_right(self, aindex):
-        return self.get_things_right('protectors', aindex)
-
-    def get_protectors_down(self, aindex):
-        return self.get_things_down('protectors', aindex)
-
-    def get_protectors_left(self, aindex):
-        return self.get_things_left('protectors', aindex)
-
     def protector_move_random(self, index):
         action = random.choice([0,1,1,1,2,3])
         if action == 0:
@@ -1547,21 +1523,6 @@ class game_space:
 
     def get_predators_in_radius(self, xpos, ypos, radius):
         return self.get_things_in_radius('predators', xpos, ypos, radius)
-
-    def get_visible_predators(self, aindex):
-        return self.get_visible_things('predators', aindex)
-
-    def get_predators_up(self, aindex):
-        return self.get_things_up('predators', aindex)
-
-    def get_predators_right(self, aindex):
-        return self.get_things_right('predators', aindex)
-
-    def get_predators_down(self, aindex):
-        return self.get_things_down('predators', aindex)
-
-    def get_predators_left(self, aindex):
-        return self.get_things_left('predators', aindex)
 
     def predator_move_random(self, index):
         action = random.choice([0,1,2])
@@ -1660,21 +1621,6 @@ class game_space:
 
     def get_shooters_in_radius(self, xpos, ypos, radius):
         return self.get_things_in_radius('shooters', xpos, ypos, radius)
-
-    def get_visible_shooters(self, aindex):
-        return self.get_visible_things('shooters', aindex)
-
-    def get_shooters_up(self, aindex):
-        return self.get_things_up('shooters', aindex)
-
-    def get_shooters_right(self, aindex):
-        return self.get_things_right('shooters', aindex)
-
-    def get_shooters_down(self, aindex):
-        return self.get_things_down('shooters', aindex)
-
-    def get_shooters_left(self, aindex):
-        return self.get_things_left('shooters', aindex)
 
     def shooter_move_random(self, index):
         action = random.choice([0,1,2])
@@ -1819,21 +1765,6 @@ class game_space:
         actual = list(set(active_b).intersection(set(all_b)))
         return actual
 
-    def get_visible_bullets(self, aindex):
-        return self.get_visible_things('bullets', aindex)
-
-    def get_bullets_up(self, aindex):
-        return self.get_things_up('bullets', aindex)
-
-    def get_bullets_right(self, aindex):
-        return self.get_things_right('bullets', aindex)
-
-    def get_bullets_down(self, aindex):
-        return self.get_things_down('bullets', aindex)
-
-    def get_bullets_left(self, aindex):
-        return self.get_things_left('bullets', aindex)
-
 
 
 
@@ -1951,21 +1882,6 @@ class game_space:
 
     def get_food_in_radius(self, xpos, ypos, radius):
         return self.get_things_in_radius('food', xpos, ypos, radius)
-
-    def get_visible_food(self, aindex):
-        return self.get_visible_things('food', aindex)
-
-    def get_food_up(self, aindex):
-        return self.get_things_up('food', aindex)
-
-    def get_food_right(self, aindex):
-        return self.get_things_right('food', aindex)
-
-    def get_food_down(self, aindex):
-        return self.get_things_down('food', aindex)
-
-    def get_food_left(self, aindex):
-        return self.get_things_left('food', aindex)
 
 ########################################
 # Routines related to genetic algorithms
@@ -2547,3 +2463,9 @@ else:
 # Predators cause energy drain in a radius instead of eating agents
 #
 # implement num_prev_states into current architecture
+# each prev_state is supplied such that blocks are merged with another block
+# state1 state2 state3   state4 state5 state6   state7  state8  state9
+# block1 block2 block3   block7 block8 block9   block13 block14 block15
+#    block4  block5         block10 block11         block17  block18
+#        block6                 block12                  block19
+#        out_cat                out_cat                  out_cat
