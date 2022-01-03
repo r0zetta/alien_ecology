@@ -2121,15 +2121,17 @@ class game_space:
         else:
             fitness = [x[self.fitness_index] for x in self.genome_store]
         new_indices = []
-        if len(fitness) > num:
-            indices = np.argpartition(fitness,-num)[-num:]
-            total_fitness = sum(fitness)
+        if len(fitness) > 2:
+            #indices = np.argpartition(fitness,-num)[-num:]
+            indices = range(len(fitness))
             min_fitness = min(fitness)
             min_fitness_sq = min_fitness*min_fitness
             for i in indices:
                 num = int((fitness[i]*fitness[i])/min_fitness_sq)
                 for n in range(num):
                     new_indices.append(i)
+        if len(new_indices) > num:
+            new_indices = random.sample(new_indices, num)
         return new_indices
 
     def get_best_genomes_from_store(self, num, atype):
