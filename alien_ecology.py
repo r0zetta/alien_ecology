@@ -11,28 +11,51 @@ from torch.distributions import Categorical
 class Net(nn.Module):
     def __init__(self, weights, l):
         super(Net, self).__init__()
-        self.weights = weights
         self.l = l
-        self.block = []
-        for item in weights:
-            if len(item) > 1:
-                self.block.append([item[0][0], item[0][1], item[1][1]])
+        self.weights = weights
+        self.inp_blocks = {}
+        for entry in self.weights:
+            for item in entry:
+                if len(item) > 3:
+                    block = item[0]
+                    depth = item[1]
+                    order = item[2]
+                    s1 = item[3]
+                    s2 = item[4]
+                    w = item[5]
+                    if block not in self.inp_blocks:
+                        self.inp_blocks[block] = {}
+                    if depth not in self.inp_blocks[block]:
+                        self.inp_blocks[block][depth] = {}
+                    if order not in self.inp_blocks[block][depth]:
+                        self.inp_blocks[block][depth][order] = []
+                    self.inp_blocks[block][depth][order].append([s1, s2, w])
+        self.block_inputs = []
+        for entry in self.weights:
+            if len(entry[0]) > 3:
+                self.block_inputs.append(entry[0][3])
+        #print("block inputs", self.block_inputs)
         self.num_actions = self.weights[-2][0][1]
-        self.num_blocks = len(self.block)
-        self.inps = [x[0] for x in self.block]
-        self.out_cat = sum([x[-1] for x in self.block])
+        #print("actions", self.num_actions)
+        self.num_blocks = len(self.inp_blocks)
+        #print("num blocks", self.num_blocks)
+        self.prev_states = len(self.inp_blocks[0])
+        #print("prev states", self.prev_states)
+        self.out_cat = self.num_blocks * self.num_actions
+        #print('out_cat', self.out_cat)
         self.out_hidden = self.weights[-3][0][1]
-        self.blocks = {}
-        for index in range(self.num_blocks):
-            weights1 = self.weights[index][0][2]
-            weights2 = self.weights[index][1][2]
-            self.blocks[index] = nn.ModuleList()
-            fc = nn.Linear(self.block[index][0], self.block[index][1])
-            fc.weight.data = weights1
-            self.blocks[index].append(fc)
-            fc = nn.Linear(self.block[index][1], self.block[index][2])
-            fc.weight.data = weights2
-            self.blocks[index].append(fc)
+        #print('out_hidden', self.out_hidden)
+        self.neurons = nn.ModuleList()
+        for bi, block in self.inp_blocks.items():
+            for di, dblock in block.items():
+                for oi, oblock in dblock.items():
+                    for item in oblock:
+                        s1 = item[0]
+                        s2 = item[1]
+                        weights = item[2]
+                        fc = nn.Linear(s1, s2)
+                        fc.weight.data = weights
+                        self.neurons.append(fc)
         self.cat_hidden = nn.Linear(self.out_cat, self.out_hidden)
         self.cat_hidden.weight.data = self.weights[-3][0][2]
         self.action = nn.Linear(self.out_hidden, self.num_actions)
@@ -42,13 +65,38 @@ class Net(nn.Module):
 
     def forward(self, x):
         block_out = torch.empty((self.num_blocks, self.num_actions))
-        current_index = 0
-        for index in range(len(self.blocks)):
-            i = x[0, current_index:current_index+self.inps[index]]
-            a = F.relu(self.blocks[index][0](i))
-            a = F.relu(self.blocks[index][1](a))
-            block_out[index] = a
-            current_index = current_index+self.inps[index]
+        neuron_index = 0
+        input_index = 0
+        for bi, block in self.inp_blocks.items():
+            binps = self.block_inputs[bi]
+            i1 = input_index
+            i2 = input_index + (self.block_inputs[bi]*self.prev_states)
+            x1 = x[0][i1:i2]
+            prev_outs = []
+            out_index = 0
+            last_out = None
+            for di, dblock in block.items():
+                if di == 0:
+                    for oi, oblock in dblock.items():
+                        inp = x1[oi*binps:(oi*binps)+binps]
+                        out = F.relu(self.neurons[neuron_index](inp))
+                        neuron_index += 1
+                        out = F.relu(self.neurons[neuron_index](out))
+                        last_out = out
+                        prev_outs.append(out)
+                        neuron_index += 1
+                else:
+                    for oi, oblock in dblock.items():
+                        inp = torch.cat((prev_outs[out_index], prev_outs[out_index+1]))
+                        out_index += 1
+                        out = F.relu(self.neurons[neuron_index](inp))
+                        neuron_index += 1
+                        out = F.relu(self.neurons[neuron_index](out))
+                        last_out = out
+                        prev_outs.append(out)
+                        neuron_index += 1
+            block_out[bi] = last_out
+            input_index += self.block_inputs[bi]*self.prev_states
         rc = torch.ravel(torch.tensor(block_out))
         rc = F.relu(self.cat_hidden(rc))
         a = F.softmax(F.relu(self.action(rc)), dim=-1)
@@ -64,38 +112,39 @@ class Net(nn.Module):
     def print_w(self):
         total_params = 0
         genome = []
-        for index in range(self.num_blocks):
+        neuron_index = 0
+        while neuron_index < len(self.neurons):
             entry = []
             print("Block: " + str(index))
-            d1 = self.blocks[index][0].weight.data.detach().numpy()
+            d1 = self.neurons[neuron_index].weight.data.detach().numpy()
+            neuron_index += 1
             print("fc0 weights: ", d1.shape)
             total_params += self.get_param_count(d1)
-            b1 = self.blocks[index][0].bias.data.detach().numpy()
-            print("fc0 biases: ", b1.shape)
-            d2 = self.blocks[index][1].weight.detach().numpy()
+            d1 = np.ravel(d1)
+            entry.extend(list(d1))
+            d2 = self.neurons[neuron_index].weight.data.detach().numpy()
+            neuron_index += 1
             print("fc1 weights: ", d2.shape)
+            d2 = np.ravel(d2)
+            entry.extend(list(d2))
             total_params += self.get_param_count(d2)
-            b2 = self.blocks[index][1].bias.data.detach().numpy()
-            print("fc1 biases: ", b2.shape)
-
+            entry = np.ravel(entry)
+            genome.append(entry)
         dc = self.cat_hidden.weight.data.detach().numpy()
+        genome.append(np.ravel(dc))
         total_params += self.get_param_count(dc)
         print("cat_hidden weights: ", dc.shape)
-        bc = self.cat_hidden.bias.data.detach().numpy()
-        print("cat_hidden biases: ", bc.shape)
-
+        print(self.weights[-3][0][2].shape)
         da = self.action.weight.data.detach().numpy()
+        genome.append(np.ravel(da))
         total_params += self.get_param_count(da)
         print("action weights: ", da.shape)
-        ba = self.action.bias.data.detach().numpy()
-        print("action biases: ", ba.shape)
-
+        print(self.weights[-2][0][2].shape)
         dv = self.value.weight.data.detach().numpy()
+        genome.append(np.ravel(dv))
         total_params += self.get_param_count(dv)
         print("value weights: ", dv.shape)
-        bv = self.value.bias.data.detach().numpy()
-        print("value biases: ", bv.shape)
-
+        print(self.weights[-1][0][2].shape)
         print("total params: ", total_params)
         genome_shape = [len(x) for x in genome]
         print(genome_shape)
@@ -103,38 +152,43 @@ class Net(nn.Module):
 
     def get_w(self):
         genome = []
-        for index in range(self.num_blocks):
+        neuron_index = 0
+        while neuron_index < len(self.neurons):
             entry = []
-            d1 = self.blocks[index][0].weight.data.detach().numpy()
+            d1 = self.neurons[neuron_index].weight.data.detach().numpy()
+            neuron_index += 1
             d1 = np.ravel(d1)
             entry.extend(list(d1))
-            d2 = self.blocks[index][1].weight.data.detach().numpy()
+            d2 = self.neurons[neuron_index].weight.data.detach().numpy()
+            neuron_index += 1
             d2 = np.ravel(d2)
             entry.extend(list(d2))
             entry = np.ravel(entry)
-            genome.append(list(entry))
+            genome.append(entry)
         dc = self.cat_hidden.weight.data.detach().numpy()
-        genome.append(list(np.ravel(dc)))
+        genome.append(np.ravel(dc))
         da = self.action.weight.data.detach().numpy()
-        genome.append(list(np.ravel(da)))
+        genome.append(np.ravel(da))
         dv = self.value.weight.data.detach().numpy()
-        genome.append(list(np.ravel(dv)))
+        genome.append(np.ravel(dv))
         return genome
 
     def clamp_w(self):
-        for index in range(self.num_blocks):
-            self.blocks[index][0].weight.data = torch.clamp(self.blocks[index][0].weight.data, min=-1.0, max=1.0)
-            self.blocks[index][1].weight.data = torch.clamp(self.blocks[index][1].weight.data, min=-1.0, max=1.0)
+        for index in range(len(self.neurons)):
+            self.neurons[index].weight.data = torch.clamp(self.neurons[index].weight.data, min=-1.0, max=1.0)
         self.cat_hidden.weight.data = torch.clamp(self.action.weight.data, min=-1.0, max=1.0)
         self.action.weight.data = torch.clamp(self.action.weight.data, min=-1.0, max=1.0)
         self.value.weight.data = torch.clamp(self.value.weight.data, min=-1.0, max=1.0)
 
     def set_w(self, w):
-        for index in range(self.num_blocks):
-            weights1 = self.weights[index][0][2]
-            weights2 = self.weights[index][1][2]
-            self.blocks[index][0].weight.data = weights1
-            self.blocks[index][1].weight.data = weights2
+        neuron_index = 0
+        for bi, block in self.inp_blocks.items():
+            for di, dblock in block.items():
+                for oi, oblock in dblock.items():
+                    for item in oblock:
+                        weights = item[2]
+                        self.neurons[neuron_index].weight.data = weights
+                        neuron_index += 1
         self.cat_hidden.weight.data = self.weights[-3][0][2]
         self.action.weight.data = self.weights[-2][0][2]
         self.value.weight.data = self.weights[-1][0][2]
@@ -158,7 +212,7 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=0.01)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4)
             self.reset()
 
     def num_params(self):
@@ -290,20 +344,35 @@ class Agent:
         self.reset()
 
     def make_weights(self):
+        net_desc = self.net_desc
+        state = self.genome
         weights = []
-        for index, item in enumerate(self.genome):
+        state_index = 0
+        b = 0
+        for index, layer_desc in enumerate(net_desc):
             entry = []
-            layer_desc = self.net_desc[index]
             if len(layer_desc) > 2:
-                s1, s2, o = layer_desc
-                w = torch.Tensor(np.reshape(item[0:s1*s2], (s2, s1)))
-                entry.append([s1, s2, w])
-                w = torch.Tensor(np.reshape(item[s1*s2:], (o, s2)))
-                entry.append([s2, o, w])
+                p, s1, s2, o = layer_desc
+                prev_states = p
+                for depth in range(prev_states):
+                    for width in range(p):
+                        item = state[state_index]
+                        sn = s1
+                        if depth > 0:
+                            sn = o * 2
+                        w = torch.Tensor(np.reshape(item[0:sn*s2], (s2, sn)))
+                        entry.append([b, depth, width, sn, s2, w])
+                        w = torch.Tensor(np.reshape(item[sn*s2:], (o, s2)))
+                        entry.append([b, depth, width, s2, o, w])
+                        state_index += 1
+                    p -= 1
+                b += 1
             else:
+                item = state[state_index]
                 s1, o = layer_desc
                 w = torch.Tensor(np.reshape(item, (o, s1)))
                 entry.append([s1, o, w])
+                state_index += 1
             weights.append(entry)
         return weights
 
@@ -423,12 +492,13 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 block_hidden_factor=1,
-                 out_cat_hidden_factor=1,
+                 block_hidden_factor=2,
+                 out_cat_hidden_factor=2,
+                 num_prev_states=2,
                  num_recent_actions=1000,
                  learners=0.50,
                  evaluate_learner_every=50,
-                 mutation_rate=0.00, # auto-set if this is zero
+                 mutation_rate=0.0015, # auto-set if this is zero
                  evolve_by_block=True,
                  integer_weights=True,
                  weight_range=1,
@@ -455,7 +525,7 @@ class game_space:
                  inference=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=50,
+                 genome_store_size=20,
                  fitness_index=2, # 1: fitness, 2: age
                  save_every=5000,
                  record_every=200,
@@ -489,7 +559,7 @@ class game_space:
         self.load_stats()
         self.record_every = record_every
         self.save_every = save_every
-        self.num_prev_states = 1
+        self.num_prev_states = num_prev_states
         self.block_hidden_factor = block_hidden_factor
         self.out_cat_hidden_factor = out_cat_hidden_factor
         self.area_size = area_size
@@ -588,13 +658,13 @@ class game_space:
             self.observations.append(shooter_obs)
             self.observations.append(bullet_obs)
         self.observation_size = sum([len(x) for x in self.observations])
+        self.action_size = len(self.actions)
         self.net_desc = []
         for index, item in enumerate(self.observations):
             obs = len(self.observations[index])
-            hidden = int(obs*self.block_hidden_factor)
-            entry = [obs, hidden]
+            hidden = int(obs * self.block_hidden_factor)
+            entry = [self.num_prev_states, obs, hidden, self.action_size]
             self.net_desc.append(entry)
-        self.action_size = len(self.actions)
         self.genome_size = []
         self.make_genome_size()
         if self.mutation_rate == 0:
@@ -636,31 +706,32 @@ class game_space:
             self.create_new_evolvable_agents(num_evolvable)
 
     def make_genome_size(self):
-        input_len = sum([x[0] for x in self.net_desc])
-        if input_len != self.observation_size:
-            msg = "Observation size: " + str(self.observation_size)
-            msg += " does not match net_desc: " + str(self.net_desc)
-            print(msg)
-            sys.exit(0)
-        for index in range(len(self.net_desc)):
-            self.net_desc[index].append(self.action_size)
-        state_size = sum([x[0] for x in self.net_desc])
-        out_cat = sum([x[-1] for x in self.net_desc])
-        out_hidden = int(self.action_size*self.out_cat_hidden_factor)
+        genome_size = []
         for item in self.net_desc:
-            gs = 0
-            for i in range(len(item)-1):
-                gs += item[i] * item[i+1]
-            self.genome_size.append(gs)
-        cat_hidden = out_cat*out_hidden
-        self.genome_size.append(cat_hidden)
+            p, inps, hidden, outs = item
+            prev_states = p
+            for depth in range(prev_states):
+                for width in range(p):
+                    size = 0
+                    if depth == 0:
+                        size += inps * hidden
+                    else:
+                        size += 2 * outs * hidden
+                    size += hidden * outs
+                    genome_size.append(size)
+                p -= 1
+        out_cat = len(self.observations) * self.action_size
+        out_hidden = self.action_size * self.out_cat_hidden_factor
+        cat_hidden = out_cat * out_hidden
+        genome_size.append(cat_hidden)
+        action_head = out_hidden * self.action_size
+        genome_size.append(action_head)
         self.net_desc.append([out_cat, out_hidden])
-        action_head = out_hidden*self.action_size
-        self.genome_size.append(action_head)
         self.net_desc.append([out_hidden, self.action_size])
-        value_head = out_hidden*1
-        self.genome_size.append(value_head)
+        value_head = out_hidden * 1
+        genome_size.append(value_head)
         self.net_desc.append([out_hidden, 1])
+        self.genome_size = genome_size
 
     def step(self):
         self.run_bullet_actions()
@@ -682,7 +753,7 @@ class game_space:
                     self.save_genomes()
             if self.save_every > 0 and self.steps % 5000 == 0:
                 self.save_stats()
-        if self.steps % 200 == 0:
+        if self.steps % 50 == 0:
             self.print_stats()
         self.steps += 1
 
@@ -1127,7 +1198,7 @@ class game_space:
                 pfm = np.mean([x[self.fitness_index] for x in self.genome_store])
             self.things['agents'][index].previous_stats = []
             if pfm > 0:
-                if mpf < pfm * 0.75:
+                if mpf < pfm * 0.5:
                     g = None
                     num_g = len(self.genome_store)
                     if num_g > 0:
@@ -1169,7 +1240,8 @@ class game_space:
                     gsfm = np.mean([x[self.fitness_index] for x in self.genome_store]) * 0.75
                 #measure = max(gsfm, self.agent_start_energy)
                 measure = self.agent_start_energy
-                reward = ((f-measure)/measure) * self.agent_start_energy
+                #reward = ((f-measure)/measure) * self.agent_start_energy
+                reward = ((f-measure)/measure)
                 #reward = min(1, max(-1, reward))
                 #print(reward)
                 reward += self.things['agents'][index].model.rewards[-1]
@@ -1356,16 +1428,31 @@ class game_space:
     def set_initial_agent_state(self, index):
         prev_states = []
         for _ in range(self.num_prev_states):
-            entry = np.zeros(len(self.observations))
+            entry = []
+            for item in self.observations:
+                for n in range(len(item)):
+                    entry.append(0)
             prev_states.append(entry)
         self.things['agents'][index].previous_states = deque(prev_states)
 
     def set_agent_state(self, index):
-        self.things['agents'][index].previous_states.popleft()
         current_observations = self.get_agent_observations(index)
         self.things['agents'][index].previous_states.append(current_observations)
+        if len(self.things['agents'][index].previous_states) > self.num_prev_states:
+            self.things['agents'][index].previous_states.popleft()
         all_states = self.things['agents'][index].previous_states
-        state = np.ravel(all_states)
+        # Assemble state:
+        # For each input block, concatenate slices from each item in all_states
+        state = []
+        iind = 0
+        for block in self.observations:
+            num_items = len(block)
+            entry = []
+            for s in all_states:
+                entry.extend(s[iind : iind+num_items])
+            iind += num_items
+            state.extend(entry)
+        state = np.ravel(state)
         state = torch.FloatTensor(state)
         state = state.unsqueeze(0)
         self.things['agents'][index].state = state
