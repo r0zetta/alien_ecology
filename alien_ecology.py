@@ -455,8 +455,6 @@ class game_space:
                  num_previous_agents=100,
                  genome_store_size=100,
                  fitness_index=2, # 1: fitness, 2: age
-                 respawn_genome_store=1.00,
-                 rebirth_genome_store=1.00,
                  save_every=5000,
                  record_every=200,
                  savedir="alien_ecology_save"):
@@ -472,8 +470,6 @@ class game_space:
         self.num_recent_actions = num_recent_actions
         self.num_previous_agents = num_previous_agents
         self.fitness_index = fitness_index
-        self.respawn_genome_store = respawn_genome_store
-        self.rebirth_genome_store = rebirth_genome_store
         self.genome_store_size = genome_store_size
         self.learners = learners
         self.evaluate_learner_every = evaluate_learner_every
@@ -2027,34 +2023,6 @@ class game_space:
             self.previous_agents.popleft()
         self.previous_agents.append(entry)
 
-    def get_best_previous_agents(self, num, atype):
-        fitness = []
-        if atype is not None:
-            fitness = [x[self.fitness_index] for x in self.previous_agents if x[5]==atype]
-        else:
-            fitness = [x[self.fitness_index] for x in self.previous_agents]
-        indices = []
-        if len(fitness) > num:
-            indices = np.argpartition(fitness,-num)[-num:]
-        return indices
-
-    def get_best_previous_genomes(self, num, atype):
-        indices = self.get_best_previous_agents(num, atype)
-        if len(indices) >= num:
-            return [self.previous_agents[i][0] for i in indices]
-        else:
-            return self.make_random_genomes(num)
-
-    def make_genome_from_previous(self, atype):
-        if len(self.previous_agents) < 1:
-            return self.make_random_genome()
-        num_g = len(self.previous_agents)
-        genomes = self.get_best_previous_genomes(num_g, atype)
-        if len(genomes) > 1:
-            return self.make_new_offspring(genomes)
-        else:
-            return self.make_random_genome()
-
     def get_best_agents_from_store(self, num, atype):
         fitness = []
         if atype is not None:
@@ -2070,7 +2038,8 @@ class game_space:
             factor = int((max_fitness*5)/mean_fitness)
             for i in indices:
                 num = int((fitness[i]*factor)/mean_fitness)
-                new_indices.extend([i*num])
+                for n in range(num):
+                    new_indices.append(i)
         return new_indices
 
     def get_best_genomes_from_store(self, num, atype):
@@ -2129,10 +2098,7 @@ class game_space:
             self.last_discovery = self.spawns
 
     def make_new_genome(self, atype):
-        if random.random() < self.respawn_genome_store:
-            return self.make_genome_from_store(atype)
-        else:
-            return self.make_genome_from_previous(atype)
+        return self.make_genome_from_store(atype)
 
     def full_gen_printable(self, gen):
         ret = ""
