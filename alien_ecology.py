@@ -87,9 +87,9 @@ class Net(nn.Module):
                 if di == 0:
                     for oi, oblock in dblock.items():
                         inp = x1[oi*binps:(oi*binps)+binps]
-                        out = F.relu(self.neurons[neuron_index](inp))
+                        out = F.leaky_relu(self.neurons[neuron_index](inp))
                         neuron_index += 1
-                        out = F.relu(self.neurons[neuron_index](out))
+                        out = F.leaky_relu(self.neurons[neuron_index](out))
                         last_out = out
                         prev_outs.append(out)
                         neuron_index += 1
@@ -97,18 +97,18 @@ class Net(nn.Module):
                     for oi, oblock in dblock.items():
                         inp = torch.cat((prev_outs[out_index], prev_outs[out_index+1]))
                         out_index += 1
-                        out = F.relu(self.neurons[neuron_index](inp))
+                        out = F.leaky_relu(self.neurons[neuron_index](inp))
                         neuron_index += 1
-                        out = F.relu(self.neurons[neuron_index](out))
+                        out = F.leaky_relu(self.neurons[neuron_index](out))
                         last_out = out
                         prev_outs.append(out)
                         neuron_index += 1
             block_out[bi] = last_out
             input_index += self.block_inputs[bi]*self.prev_states
         rc = torch.ravel(torch.tensor(block_out))
-        rc = F.relu(self.cat_hidden(rc))
-        a = F.softmax(F.relu(self.action(rc)), dim=-1)
-        v = F.relu(self.value(rc))
+        rc = F.leaky_relu(self.cat_hidden(rc))
+        a = F.softmax(F.leaky_relu(self.action(rc)), dim=-1)
+        v = F.leaky_relu(self.value(rc))
         return a, v
 
     def get_param_count(self, item):
@@ -220,7 +220,8 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-3)
+            #self.optimizer = optim.SGD(self.policy.parameters(), lr=0.1, momentum=0.9)
             self.reset()
 
     def num_params(self):
@@ -262,7 +263,8 @@ class GN_model:
             return
 
         eps = np.finfo(np.float32).eps.item()
-        gamma = 0.995
+        #gamma = 0.995
+        gamma = 0.95
         R = 0.0
         policy_loss = torch.Tensor([0.0])
         value_loss = torch.Tensor([0.0])
@@ -1250,7 +1252,7 @@ class game_space:
                 #measure = max(gsfm, self.agent_start_energy)
                 measure = self.agent_start_energy
                 reward = ((f-measure)**2)/(measure**2)
-                reward += ((f-measure))/(measure)
+                reward += (f-measure)/measure
                 reward += ae - 1.3
                 reward += self.things['agents'][index].model.rewards[-1]
                 print(f, "%.4f"%reward)
@@ -2271,7 +2273,7 @@ class game_space:
             else:
                 nvar = var
             if len(nvar) > 0:
-                lmsg += affix + lab + " agent (" + "%03d"%len(nvar) + ") stats:"
+                lmsg += affix + lab + " agent (" + "%03d"%len(nvar) + ") stats: "
                 #lmsg += "\n"
                 for i, l in enumerate(labels):
                     temp = [x[i+1] for x in nvar]
