@@ -53,14 +53,14 @@ class Net(nn.Module):
                         s1 = item[0]
                         s2 = item[1]
                         weights = item[2]
-                        fc = nn.Linear(s1, s2)
+                        fc = nn.Linear(s1, s2, bias=False)
                         fc.weight.data = weights
                         self.neurons.append(fc)
-        self.cat_hidden = nn.Linear(self.out_cat, self.out_hidden)
+        self.cat_hidden = nn.Linear(self.out_cat, self.out_hidden, bias=False)
         self.cat_hidden.weight.data = self.weights[-3][0][2]
-        self.action = nn.Linear(self.out_hidden, self.num_actions)
+        self.action = nn.Linear(self.out_hidden, self.num_actions, bias=False)
         self.action.weight.data = self.weights[-2][0][2]
-        self.value = nn.Linear(self.out_hidden, 1)
+        self.value = nn.Linear(self.out_hidden, 1, bias=False)
         self.value.weight.data = self.weights[-1][0][2]
 
 # num_prev_states implemented as follows:
@@ -87,9 +87,9 @@ class Net(nn.Module):
                 if di == 0:
                     for oi, oblock in dblock.items():
                         inp = x1[oi*binps:(oi*binps)+binps]
-                        out = F.leaky_relu(self.neurons[neuron_index](inp))
+                        out = F.tanh(self.neurons[neuron_index](inp))
                         neuron_index += 1
-                        out = F.leaky_relu(self.neurons[neuron_index](out))
+                        out = F.tanh(self.neurons[neuron_index](out))
                         last_out = out
                         prev_outs.append(out)
                         neuron_index += 1
@@ -97,18 +97,18 @@ class Net(nn.Module):
                     for oi, oblock in dblock.items():
                         inp = torch.cat((prev_outs[out_index], prev_outs[out_index+1]))
                         out_index += 1
-                        out = F.leaky_relu(self.neurons[neuron_index](inp))
+                        out = F.tanh(self.neurons[neuron_index](inp))
                         neuron_index += 1
-                        out = F.leaky_relu(self.neurons[neuron_index](out))
+                        out = F.tanh(self.neurons[neuron_index](out))
                         last_out = out
                         prev_outs.append(out)
                         neuron_index += 1
             block_out[bi] = last_out
             input_index += self.block_inputs[bi]*self.prev_states
         rc = torch.ravel(torch.tensor(block_out))
-        rc = F.leaky_relu(self.cat_hidden(rc))
-        a = F.softmax(F.leaky_relu(self.action(rc)), dim=-1)
-        v = F.leaky_relu(self.value(rc))
+        rc = F.tanh(self.cat_hidden(rc))
+        a = F.softmax(F.relu(self.action(rc)), dim=-1)
+        v = F.relu(self.value(rc))
         return a, v
 
     def get_param_count(self, item):
@@ -220,7 +220,7 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-3)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4)
             #self.optimizer = optim.SGD(self.policy.parameters(), lr=0.1, momentum=0.9)
             self.reset()
 
@@ -508,10 +508,10 @@ class game_space:
                  num_prev_states=2,
                  num_recent_actions=1000,
                  learners=0.50,
-                 evaluate_learner_every=1000,
-                 mutation_rate=0.0015, # auto-set if this is zero
+                 evaluate_learner_every=10,
+                 mutation_rate=0.0013, # auto-set if this is zero
                  evolve_by_block=True,
-                 integer_weights=False,
+                 integer_weights=True,
                  weight_range=1,
                  area_size=50,
                  area_toroid=True,
