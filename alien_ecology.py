@@ -220,7 +220,8 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4)
+            self.optimizer = optim.AdamW(self.policy.parameters())
+            #self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4)
             #self.optimizer = optim.SGD(self.policy.parameters(), lr=0.1, momentum=0.9)
             self.reset()
 
@@ -511,7 +512,7 @@ class game_space:
                  evaluate_learner_every=10,
                  mutation_rate=0.0013, # auto-set if this is zero
                  evolve_by_block=True,
-                 integer_weights=True,
+                 integer_weights=False,
                  weight_range=1,
                  area_size=50,
                  area_toroid=True,
@@ -536,7 +537,7 @@ class game_space:
                  inference=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=50,
+                 genome_store_size=100,
                  fitness_index=2, # 1: fitness, 2: age
                  save_every=5000,
                  record_every=200,
@@ -1253,7 +1254,7 @@ class game_space:
                 measure = self.agent_start_energy
                 reward = ((f-measure)**2)/(measure**2)
                 reward += (f-measure)/measure
-                reward += ae - 1.3
+                reward += ae - 1.5
                 reward += self.things['agents'][index].model.rewards[-1]
                 print(f, "%.4f"%reward)
                 reward = np.float32(reward)
