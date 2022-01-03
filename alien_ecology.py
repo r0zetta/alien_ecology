@@ -2061,10 +2061,19 @@ class game_space:
             fitness = [x[self.fitness_index] for x in self.genome_store if x[5]==atype]
         else:
             fitness = [x[self.fitness_index] for x in self.genome_store]
-        indices = []
+        new_indices = []
         if len(fitness) > num:
             indices = np.argpartition(fitness,-num)[-num:]
-        return indices
+            total_fitness = sum(fitness)
+            mean_fitness = np.mean(fitness)
+            max_fitness = max(fitness)
+            factor = int((max_fitness*5)/mean_fitness)
+            new_indices = []
+            for i in indices:
+                ifit = fitness[i]
+                num = int((ifit*factor)/mean_fitness)
+                new_indices.extend(i*num)
+        return new_indices
 
     def get_best_genomes_from_store(self, num, atype):
         indices = self.get_best_agents_from_store(num, atype)
@@ -2443,6 +2452,7 @@ else:
 # how to get initial training further towards actual real policies?
 # How to model diversity/novelty in this environment?
 # improve the entropy calculation of locations visited
+# selection of genomes for reproduction should favor those with higher fitness
 #
 # Predators cause energy drain in a radius instead of eating agents
 #
