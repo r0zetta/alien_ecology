@@ -158,7 +158,7 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.Adam(self.policy.parameters(), lr=0.1)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=0.01)
             self.reset()
 
     def num_params(self):
@@ -218,6 +218,8 @@ class GN_model:
             value_loss = value_loss + F.smooth_l1_loss(value, torch.tensor([R]))
         self.optimizer.zero_grad()
         loss = policy_loss + value_loss
+        #print(returns)
+        #print(policy_loss, value_loss, loss)
         loss.backward()
         #for param in self.policy.parameters():
         #    param.grad.data.clamp(-1, 1)
@@ -265,6 +267,8 @@ class Agent:
         self.xpos = x
         self.ypos = y
         self.zpos = z
+        self.inertial_damping = 0.0
+        self.speed = 0.5
         self.color = color
         self.color_str = self.colors[color]
         self.genome = genome
@@ -324,8 +328,6 @@ class Agent:
         self.fitness = 0
         self.age = 0
         self.temperature = 20
-        self.inertial_damping = 0.60
-        self.speed = 0.4
         self.previous_states = deque()
         self.previous_actions = []
         self.previous_x = []
@@ -421,8 +423,8 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 block_hidden_factor=2,
-                 out_cat_hidden_factor=2,
+                 block_hidden_factor=1,
+                 out_cat_hidden_factor=1,
                  num_recent_actions=1000,
                  learners=0.50,
                  evaluate_learner_every=50,
@@ -431,11 +433,11 @@ class game_space:
                  integer_weights=True,
                  weight_range=1,
                  area_size=50,
-                 area_toroid=False,
+                 area_toroid=True,
                  num_agents=10,
                  agent_start_energy=100,
                  agent_energy_drain=1,
-                 agent_view_distance=12,
+                 agent_view_distance=15,
                  num_protectors=0,
                  protector_safe_distance=7,
                  num_predators=0,
@@ -447,13 +449,13 @@ class game_space:
                  bullet_life=100,
                  bullet_speed=0.35,
                  bullet_radius=0.25,
-                 num_food=10,
+                 num_food=30,
                  use_zones=False,
                  visuals=False,
                  inference=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=100,
+                 genome_store_size=50,
                  fitness_index=2, # 1: fitness, 2: age
                  save_every=5000,
                  record_every=200,
@@ -526,13 +528,14 @@ class game_space:
                            'left',
                            'upleft']
         self.obs_directions = ['up',
-                               'upright',
+                               #'upright',
                                'right',
-                               'downright',
+                               #'downright',
                                'down',
-                               'downleft',
+                               #'downleft',
                                'left',
-                               'upleft']
+                               #'upleft',
+                               ]
         self.actions = [
                         #"rotate_right",
                         #"rotate_left",
@@ -572,7 +575,7 @@ class game_space:
                      "visible_predators",
                      "own_energy"]
         self.observations = []
-        self.observations.append(location_obs)
+        #self.observations.append(location_obs)
         if self.area_toroid == False:
             self.observations.append(boundary_obs)
         if self.num_food > 0:
@@ -679,7 +682,7 @@ class game_space:
                     self.save_genomes()
             if self.save_every > 0 and self.steps % 5000 == 0:
                 self.save_stats()
-        if self.steps % 50 == 0:
+        if self.steps % 200 == 0:
             self.print_stats()
         self.steps += 1
 
@@ -1144,7 +1147,7 @@ class game_space:
             ex = self.entropy(self.things['agents'][index].previous_x)
             ey = self.entropy(self.things['agents'][index].previous_y)
             a = self.things['agents'][index].age
-            h = self.things['agents'][index].happiness + ae*50 + ex*50 + ey*50
+            h = self.things['agents'][index].happiness + ae*50
             d = self.things['agents'][index].distance_travelled
             f = a + h
             g = self.things['agents'][index].model.get_w()
@@ -1166,8 +1169,9 @@ class game_space:
                     gsfm = np.mean([x[self.fitness_index] for x in self.genome_store]) * 0.75
                 #measure = max(gsfm, self.agent_start_energy)
                 measure = self.agent_start_energy
-                reward = ((f-measure)/measure) + (ae*0.033) + (ex*0.033) + (ey*0.033) - 0.5
+                reward = ((f-measure)/measure) * self.agent_start_energy
                 #reward = min(1, max(-1, reward))
+                #print(reward)
                 reward += self.things['agents'][index].model.rewards[-1]
                 reward = np.float32(reward)
                 self.things['agents'][index].model.rewards[-1] = reward
@@ -1216,8 +1220,8 @@ class game_space:
                 if len(nearby_shooters) > 0:
                     fi = random.choice(nearby_shooters)
                     self.respawn_shooter(fi)
-                    self.things['agents'][index].energy += 100
-                    self.things['agents'][index].happiness += 100
+                    self.things['agents'][index].energy += self.agent_start_energy
+                    self.things['agents'][index].happiness += self.agent_start_energy
                     # Reward learning agents for eating shooter
                     if len(self.things['agents'][index].model.rewards) > 0:
                         self.things['agents'][index].model.rewards[-1] = np.float32(1.0)
@@ -1856,8 +1860,8 @@ class game_space:
                 self.set_food_entity(index)
 
     def respawn_food(self, index):
-        xpos = random.random()*self.area_size
-        ypos = random.random()*self.area_size
+        xpos = int(random.random()*self.area_size)
+        ypos = int(random.random()*self.area_size)
         self.things['food'][index].xpos = xpos
         self.things['food'][index].ypos = ypos
         zpos = -1
@@ -2033,11 +2037,10 @@ class game_space:
         if len(fitness) > num:
             indices = np.argpartition(fitness,-num)[-num:]
             total_fitness = sum(fitness)
-            mean_fitness = np.mean(fitness)
-            max_fitness = max(fitness)
-            factor = int((max_fitness*5)/mean_fitness)
+            min_fitness = min(fitness)
+            min_fitness_sq = min_fitness*min_fitness
             for i in indices:
-                num = int((fitness[i]*factor)/mean_fitness)
+                num = int((fitness[i]*fitness[i])/min_fitness_sq)
                 for n in range(num):
                     new_indices.append(i)
         return new_indices
