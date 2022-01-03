@@ -63,6 +63,14 @@ class Net(nn.Module):
         self.value = nn.Linear(self.out_hidden, 1)
         self.value.weight.data = self.weights[-1][0][2]
 
+# num_prev_states implemented as follows:
+# each prev_state is supplied such that blocks are merged with another block
+# state1 state2 state3   state4 state5 state6   state7  state8  state9
+# block1 block2 block3   block7 block8 block9   block13 block14 block15
+#    block4  block5         block10 block11         block17  block18
+#        block6                 block12                  block19
+#        out_cat                out_cat                  out_cat
+
     def forward(self, x):
         block_out = torch.empty((self.num_blocks, self.num_actions))
         neuron_index = 0
@@ -494,14 +502,14 @@ class Zone:
 class game_space:
     def __init__(self,
                  block_hidden_factor=1,
-                 out_cat_hidden_factor=2,
+                 out_cat_hidden_factor=4,
                  num_prev_states=2,
                  num_recent_actions=1000,
                  learners=0.50,
-                 evaluate_learner_every=50,
+                 evaluate_learner_every=1000,
                  mutation_rate=0.0015, # auto-set if this is zero
                  evolve_by_block=True,
-                 integer_weights=True,
+                 integer_weights=False,
                  weight_range=1,
                  area_size=50,
                  area_toroid=True,
@@ -509,9 +517,9 @@ class game_space:
                  agent_start_energy=100,
                  agent_energy_drain=1,
                  agent_view_distance=15,
-                 num_protectors=0,
+                 num_protectors=3,
                  protector_safe_distance=7,
-                 num_predators=0,
+                 num_predators=6,
                  predator_view_distance=8,
                  predator_kill_distance=2,
                  num_shooters=0,
@@ -520,13 +528,13 @@ class game_space:
                  bullet_life=100,
                  bullet_speed=0.35,
                  bullet_radius=0.25,
-                 num_food=10,
+                 num_food=0,
                  use_zones=False,
                  visuals=False,
                  inference=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=20,
+                 genome_store_size=50,
                  fitness_index=2, # 1: fitness, 2: age
                  save_every=5000,
                  record_every=200,
@@ -754,7 +762,7 @@ class game_space:
                     self.save_genomes()
             if self.save_every > 0 and self.steps % 5000 == 0:
                 self.save_stats()
-        if self.steps % 50 == 0:
+        if self.steps % 100 == 0:
             self.print_stats()
         self.steps += 1
 
@@ -1242,7 +1250,10 @@ class game_space:
                 #measure = max(gsfm, self.agent_start_energy)
                 measure = self.agent_start_energy
                 reward = ((f-measure)**2)/(measure**2)
+                reward += ((f-measure))/(measure)
+                reward += ae - 1.3
                 reward += self.things['agents'][index].model.rewards[-1]
+                print(f, "%.4f"%reward)
                 reward = np.float32(reward)
                 self.things['agents'][index].model.rewards[-1] = reward
             self.things['agents'][index].previous_stats.append(entry)
@@ -1262,6 +1273,9 @@ class game_space:
     def kill_agents(self, dead):
         for index in dead:
             entry = self.store_agent_entry(index)
+            f = entry[self.fitness_index]
+            ae = self.entropy(self.things['agents'][index].previous_actions)
+            #print(f)
             self.deaths += 1
             self.spawns += 1
             self.things['agents'][index].reset()
@@ -2246,18 +2260,19 @@ class game_space:
 
     def make_labels(self, var, affix, saff):
         labels = ["fitness", "age", "happiness", "distance"]
+        to_print = ["age"]
         if len(var) < 1:
             return ""
         lmsg = ""
-        conds = ["evolving", "learning", "all"]
+        conds = ["evolving", "learning", "all     "]
         for cond, lab in enumerate(conds):
             if cond < 2:
                 nvar = [x for x in var if x[5]==cond]
             else:
                 nvar = var
             if len(nvar) > 0:
-                lmsg += affix + lab + " agent (" + str(len(nvar)) + ") stats:"
-                lmsg += "\n"
+                lmsg += affix + lab + " agent (" + "%03d"%len(nvar) + ") stats:"
+                #lmsg += "\n"
                 for i, l in enumerate(labels):
                     temp = [x[i+1] for x in nvar]
                     if len(temp) > 0:
@@ -2267,11 +2282,12 @@ class game_space:
                         self.record_stats(saff+"_"+lab+"_"+l+"_max", mx)
                         mi = min(temp)
                         self.record_stats(saff+"_"+lab+"_"+l+"_min", mi)
-                        lmsg += "mean " + l + ": " + "%.2f"%me
-                        lmsg += "  max " + l + ": " + "%.2f"%mx
-                        lmsg += "  min " + l + ": " + "%.2f"%mi
-                        lmsg += "\n"
-                lmsg += "\n"
+                        if l in to_print:
+                            lmsg += "mean " + l + ": " + "%.2f"%me
+                            lmsg += "  max " + l + ": " + "%.2f"%mx
+                            lmsg += "  min " + l + ": " + "%.2f"%mi
+                            lmsg += "\n"
+                #lmsg += "\n"
         return lmsg
 
     def print_action_dist(self, atype):
@@ -2367,7 +2383,7 @@ class game_space:
         msg += "\n"
         msg += self.make_labels(self.previous_agents, "Previous ", "prev")
         msg += "\n"
-        msg += self.make_labels(self.genome_store, "Genome store ", "gs")
+        msg += self.make_labels(self.genome_store, "Gen_stor ", "gs")
         msg += "\n"
         gsd, mean_gsd = self.get_genetic_diversity()
         self.record_stats("genetic diversity", mean_gsd)
@@ -2506,14 +2522,5 @@ else:
 # how to get initial training further towards actual real policies?
 # How to model diversity/novelty in this environment?
 # improve the entropy calculation of locations visited
-# selection of genomes for reproduction should favor those with higher fitness
 #
-# Predators cause energy drain in a radius instead of eating agents
-#
-# implement num_prev_states into current architecture
-# each prev_state is supplied such that blocks are merged with another block
-# state1 state2 state3   state4 state5 state6   state7  state8  state9
-# block1 block2 block3   block7 block8 block9   block13 block14 block15
-#    block4  block5         block10 block11         block17  block18
-#        block6                 block12                  block19
-#        out_cat                out_cat                  out_cat
+# Predators cause energy drain in a radius instead of eating agents?
