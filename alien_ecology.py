@@ -512,7 +512,7 @@ class game_space:
                  evaluate_learner_every=10,
                  mutation_rate=0.0013, # auto-set if this is zero
                  evolve_by_block=True,
-                 integer_weights=False,
+                 integer_weights=0.8,
                  weight_range=1,
                  area_size=50,
                  area_toroid=True,
@@ -767,6 +767,7 @@ class game_space:
                 self.save_stats()
         if self.steps % 100 == 0:
             self.print_stats()
+        self.integer_weights = max(0, self.integer_weights*0.99)
         self.steps += 1
 
 #################
@@ -2004,7 +2005,7 @@ class game_space:
 
     def make_single_weight(self):
         val = 0.0
-        if self.integer_weights == False:
+        if random.random() > self.integer_weights:
             val = random.uniform(-1*self.weight_range, self.weight_range)
         else:
             val = random.randint(-1*self.weight_range, self.weight_range)
@@ -2013,7 +2014,7 @@ class game_space:
         return float(val)
 
     def make_weights(self, num):
-        if self.integer_weights == False:
+        if random.random() > self.integer_weights:
             return np.random.uniform(-1*self.weight_range, self.weight_range,num)
         else:
             weights = []
