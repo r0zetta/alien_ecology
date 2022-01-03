@@ -263,7 +263,8 @@ class GN_model:
             R = r + gamma * R
             returns.insert(0, R.astype(np.float32))
         returns = torch.tensor(returns)
-        returns = (returns - returns.mean()) / (returns.std() + eps)
+        if len(returns) > 1:
+            returns = (returns - returns.mean()) / (returns.std() + eps)
         for log_prob, value, R in zip(self.probs,
                                       self.values,
                                       returns):
@@ -492,7 +493,7 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 block_hidden_factor=2,
+                 block_hidden_factor=1,
                  out_cat_hidden_factor=2,
                  num_prev_states=2,
                  num_recent_actions=1000,
@@ -519,7 +520,7 @@ class game_space:
                  bullet_life=100,
                  bullet_speed=0.35,
                  bullet_radius=0.25,
-                 num_food=30,
+                 num_food=10,
                  use_zones=False,
                  visuals=False,
                  inference=False,
@@ -598,13 +599,13 @@ class game_space:
                            'left',
                            'upleft']
         self.obs_directions = ['up',
-                               #'upright',
+                               'upright',
                                'right',
-                               #'downright',
+                               'downright',
                                'down',
-                               #'downleft',
+                               'downleft',
                                'left',
-                               #'upleft',
+                               'upleft',
                                ]
         self.actions = [
                         #"rotate_right",
@@ -1240,10 +1241,7 @@ class game_space:
                     gsfm = np.mean([x[self.fitness_index] for x in self.genome_store]) * 0.75
                 #measure = max(gsfm, self.agent_start_energy)
                 measure = self.agent_start_energy
-                #reward = ((f-measure)/measure) * self.agent_start_energy
-                reward = ((f-measure)/measure)
-                #reward = min(1, max(-1, reward))
-                #print(reward)
+                reward = ((f-measure)**2)/(measure**2)
                 reward += self.things['agents'][index].model.rewards[-1]
                 reward = np.float32(reward)
                 self.things['agents'][index].model.rewards[-1] = reward
@@ -2125,9 +2123,9 @@ class game_space:
             #indices = np.argpartition(fitness,-num)[-num:]
             indices = range(len(fitness))
             min_fitness = min(fitness)
-            min_fitness_sq = min_fitness*min_fitness
+            min_fitness_sq = min_fitness ** 2
             for i in indices:
-                num = int((fitness[i]*fitness[i])/min_fitness_sq)
+                num = min(10, int((fitness[i] ** 2)/min_fitness_sq))
                 for n in range(num):
                     new_indices.append(i)
         if len(new_indices) > num:
@@ -2487,7 +2485,7 @@ if print_visuals == True:
     window.borderless = False
     window.fullscreen = False
     window.exit_button.visible = False
-    window.fps_counter.enabled = False
+    window.fps_counter.enabled = True
 
     gs = game_space(visuals=True, inference=inference)
     camera_pos1 = -1 * int(gs.area_size/2)
