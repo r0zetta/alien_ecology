@@ -2068,11 +2068,9 @@ class game_space:
             mean_fitness = np.mean(fitness)
             max_fitness = max(fitness)
             factor = int((max_fitness*5)/mean_fitness)
-            new_indices = []
             for i in indices:
-                ifit = fitness[i]
-                num = int((ifit*factor)/mean_fitness)
-                new_indices.extend(i*num)
+                num = int((fitness[i]*factor)/mean_fitness)
+                new_indices.extend([i*num])
         return new_indices
 
     def get_best_genomes_from_store(self, num, atype):
