@@ -1,63 +1,74 @@
 ## Introduction
-This repository contains code that implements an environment for simulated organisms to learn and evolve behaviours. The environment itself is a two-dimensional toroidal plane - organisms that travel over an edge appear at the opposite edge of the plane in a similar fashion to how pacman moves. The environment presents a number of problems the organisms must learn to solve.
+This repository contains code that implements an environment for simulated organisms to learn and evolve behaviours. The environment itself is a two-dimensional plane that can be configured as either toriodal or bounded. The environment presents a number of problems the agents must learn to solve.
 
-1. Organisms have energy that depletes during each simulation step. Organisms can replenish energy in a number of ways, such as by consuming food or staying close to protectors.
-2. Predators exist in the environment that can eat organisms. Predators move using very simple hard-coded logic (if they can see organisms ahead, move forward, otherwise move in a random fashion). Organisms must thus learn to evade predators.
-3. Protectors are friendly entities that move randomly. When predators are too close to protectors they become stunned and are unable to perform actions. Note that they will still consume agents that bump into them.
-4. Environmental effects are simluated. Night and day cycles affect the distance organisms can "see". Cold and hot cycles affect the drain on organisms' energy. During cold periods, organisms can increase their temperature by being close to other organisms. During hot periods, organisms must spread out.
+1. Agents have energy that depletes during each simulation step. They can replenish energy in a number of ways, such as by consuming things or staying close to protectors.
+2. Predators can be added to the environment. Predators move using very simple hard-coded logic (if they can see agents ahead they move forward, otherwise they move in a random fashion). Agents must thus learn to evade predators.
+3. Shooters can be added to the environment. Shooters move randomly and will fire bullets in the direction of agents within a detection radius. Agents can consume shooters by moving onto them, which adds to the agent's energy.
+4. Protectors can be added to the environment. Protectors are friendly entities that move randomly. When predators are too close to protectors they become stunned and are unable to perform actions. Agents moving close to a protector replenish energy. The protector healing field also stops bullets fired by shooters.
+5. Zones can be added that affect agents. Zone types include attractor, which pull agents in, repulsors which push agents away, acceleration which decrease inertial damping, and damping fields which add extra inertial damping to agents' movement.
 
-Organisms can perform rotation and propulsion movement actions. Organisms can "see" further in the direction they're facing, but can also "sense" things above, below, to the left, and to the right of their position. Organisms can propel in the direction they're facing, as well as in up, down, left and right directions.
+Agents can perform rotation and propulsion movement actions, all of which are configurable. Agents can "sense" things in different directions around their position. Sensors are configurable to either up, down, left and right, or in eight 45-degree angles from the center of the agent.
 
-Organism logic is represented by simple feed-forward neural networks. Inputs are observations from the environment that include signals denoting that other organisms are close by or in view. Outputs of the neural network tie into organism actions. Agents can be graded on the number of steps they lived for, or a fitness value that includes bonuses for movement and performing actions.
+Agent logic is represented by simple feed-forward neural networks. Inputs are observations from the environment that usually include signals denoting that other things are within sensor range. Outputs of the neural network tie into agent actions. Agents can be graded on the number of steps they lived for, or by a fitness value that includes bonuses for performing actions.
 
-Organisms are trained either by evolution, reinforcement learning, or a hybrid of the two. The weights of the neural networks are used as each organism's genome. Genomes from organisms that perform the best are stored and used for reproduction, or to replace an ill-performing learning agent's weights after a specified evaluation period. When an evolving organism dies it is respawned at a new random location and given a genome evolved from previously collected genomes. If a learning agent dies, backpropagation is used to train its neural network (using A2C) and it is respawned at a new random location. Learning agents are periodically evaluated on the mean age or fitness during previous n runs. If a learning agent fails its evaluation, it is replaced with a new learning agent that receives neural network weights from a random previously recorded genome.
+Agents are trained using a combination of evolution and reinforcement learning. The weights contained in each agent's neural network are used as a genome. Genomes from organisms that perform the best are stored and used for reproduction, or to replace an ill-performing learning agent's weights after a specified evaluation period. When an evolving organism dies it is respawned at a new random location and given a genome evolved from a genome store. If a learning agent dies, backpropagation is used to train its neural network (using A2C) and it is respawned at a new random location. Learning agents are periodically evaluated on their mean age or fitness during a specified number of previous runs. If a learning agent fails its evaluation, it is replaced with a new learning agent that receives neural network weights from the genome store.
 
 The purpose of this simulation is:
 - to observe and document interesting emergent behaviours in the simulated swarm
-- to understand whether evolution can be used to improve reinforcement learning mechanisms
+- to understand if evolution and reinforcement learning mechanisms can be used in tandem
 - to discover methods that allow agents to quickly learn policies capable of solving multiple tasks
 - to discover methods that allow agents to quickly learn policies capable of solving complex tasks
 
-## Experiment 1: evade predators
+## Initial experiments
+I started by running some experiments designed to train policies on simple tasks, using the smallest neural networks possible.
+
+# Experiment 1: evade predators
 This simulation contains only agents and predators. The agent's state includes readings of the number of predators above, below, to the left, and to the right of the agent, within the agent's maximum view distance (state size 4, action size 4, hidden size [8], parameters 72). Agents learn to run away from predators, and this policy can be learned quickly. Evolutionary processes find optimal policies much quicker than reinforcement learning mechanisms.
 
-## Experiment 2: collect food
+# Experiment 2: collect food
 This simulation contains only agents and food. Agents start with 200 energy and lose 1 energy per step. Colliding with food grants the agent 50 energy and causes the food to respawn in a new random location. Agents receive a reading of number of food above, below, to the left, and to the right of the agent, and their own energy value (state size 4, action size 4, hidden size [8], parameters 72).
 
-## Experiment 2.5: apply collect food policy to follow protector scenario
+# Experiment 3: follow protectors
+This simulation contains only agents and protectors. Agents do not lose energy over time, and are thus rewarded for achieving longer lifespans. Agents receive a reading of number of protectors above, below, to the left, and to the right of the agent (state size 4, action size 4, hidden size [8], parameters 72).
 
-## Experiment 3: follow protectors
-This simulation contains only agents and protectors. Agents do not lose energy over time, and are thus rewarded for achieveing longer lifespans. Agents receive a reading of number of protectors above, below, to the left, and to the right of the agent (state size 4, action size 4, hidden size [8], parameters 72).
-
-## Experiment 4: evade predators and follow protectors
+# Experiment 4: evade predators and follow protectors
 This simulation contains both predators and protectors. Agents lose energy over time and are thus rewarded for regaining energy by staying close to protectors. Agents receive readings about nearby protectors and predators and a flag that indicates whether they are within the healing field of a protector (state size 9, action size 4, hidden size 16, parameters 224).
 
-## Experiment 5: attractor, repulsor, and damping zones added
-This experiment combines all of the previous, and contains predators, protectors, and food (state size 13). The simulation environment also contains zones that affect the agents' movement. Attractor zones pull agents to the center, repulsor zones push agents away, damping zones slow agents down, and acceleration zones speed them up. Agents do not receive readings about these zones, and must learn policies despite their effects. Predators and protectors are unaffected by these zones.
-
 ## Findings
-When presented with a small state space and limited action space, agents quickly learned good policies for certain tasks, such as evading predators, staying close to protectors and colliding with food pellets. These simple tasks can be somewhat similar - for instance, the food search and follow protector tasks both require agents to move in the direction of a perceived signal.
+When presented with a small state space and limited action space, agents quickly learned good policies for certain tasks, such as evading predators, staying close to protectors. However, certain tasks such a picking up food, and multi-problem tasks were not so easily learned. This is perhaps due to the nature of this environment - rewards are typically only received at the end of an episode, and as better policies are found, agents live longer and thus episodes take longer to run. For scenarios where the agents require multiple inputs (e.g. sensors for predators, sensors for protectors, sensors for food), the neural networks become quite large (in terms of number of parameters) and thus evolution is unlikely to find good policies quickly. A number of experiments were run in an attempt to improve training in these scenarios. Details follow.
 
-It would be interesting to discover whether the policy learned for collecting food would work out-of-the-box in the scenario that requires agents to locate the follow a protector.
+# 1. Split inputs for different tasks into "blocks"
 
-Multi-step tasks were much more difficult to learn due the the number of inputs and the sparse rewards. Perhaps breaking down tasks into small, easily learnable blocks is the way to create fast learning policies? Instead of training an agent on the complex task, might there be a way of training multiple models on sub-tasks and then combining them to solve the more complex task? Perhaps the answer is not to attach all inputs to one hidden layer, but to attach sets of inputs related to a specific task to their own hidden layer and output layer of size number of actions, concatenate all sub-output layers, and then attach them to a final output layer containing the number of actions.
+As mentioned, multi-problem tasks were difficult to learn due the the number of inputs. I experimented with breaking down tasks into small, easily learnable blocks. Instead of attaching all inputs to one hidden layer, inputs are split into blocks (e.g. sensor readings for predators are grouped into one block, sensor readings for food are grouped into another, and so on). Each block is attached to a small hidden layer and then an output layer of the size of the number of actions the agent can perform. Output layers from each task block are then concatenated and attached to a final output block.
+
+For example, an agent that receives four inputs for detecting predators, four for protectors, and four for food, would have the following task block architecture:
+
+Model input: 12 values -> split into three slices each containing four values
+
+For each input slice, feed into a separate hidden layer of 8, and then into an output layer of 4, i.e. 3 blocks each containing 64 parameters
+
+Concatenate the three sets of four outputs into an input layer for the next step (size 12).
+
+Connect the concatenated 12 values to a hidden layer of 8 and then a softmax layer of 4 values.
+
+# 2. Evolve by block instead of across the entire genome
+
+Once tasks have been split into blocks, the weights that comprise an agent's genome can also be grouped - i.e., the weights for each task block, and weights for the action head, and the weights for the value head. Thus, in the above example, each agent genome would be represented by 5 blocks. When a reproduction step occurs, instead of performing crossover on the entire concatenated weights, it is applied on a block-by-block basis. Since each sub-block is small, evolutionary algorithms may more likely find good solutions.
+
+# 3. Use "integer" weights instead of uniform random weights
+
+In my initial experiments, genomes were created using uniform random values. I experimented with initializing genomes using "integer" values (i.e. -1, 0, 1) to determine whether such values may allow evolutionary mechanisms to find solutions faster. Since the same genomes are used by the reinforcement learning process, zero values were replaced with small, non-zero values random.uniform(-0.1, 0.1).
+
+The "integer" genomes created using this process can be represented as strings by converting the int value of each weight into an alphabetic representation. Genomic diversity can be studied in this manner. 
+
+# 4. Improve final reward calculation to encourage longer episodes
+
+# 5. Add handling of previous states
 
 
-For example, say the agent needs to learn tasks involving four inputs for detecting predators, four for protectors and four for food, the layers would look like this:
 
-Model input: 12 values -> split into 3 x 4 sets
 
-For each set of four, feed into a separate hidden layer of 8, and then into an output layer of 4, i.e. 3 blocks each containing 64 parameters
 
-Concatenate the three sets of four outputs -> 12 output values from the three combined logic blocks
-
-Connect the concatenated 12 values into a softmax layer of 4 values, i.e. 48 parameters (60 including A2C value head)
-
-Total parameters: 240 (252 with A2C)
-
-However, the way we'd approach this from an evolutionary standpoint would be to store the parameters as not one long genome, but as one for each of the three task sub-blocks, and one for the final layer. When reproducing, we'd combine and mutate each block separately, thus preserving learned features for each task. Each sub-block genome would thus be quite small and therefore the chance of evolving a policy would be much higher than attempting to evolve a policy on a genome that is hundreds of items in length.
-
-For now, I hope to leave the code in a state that allows anyone who downloads the repository to run and enjoy watching organisms evolve. I'll update this repository with new findings and discoveries as I make them.
 
 
 # Technical details
