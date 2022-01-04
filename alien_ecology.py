@@ -264,8 +264,8 @@ class GN_model:
             return
 
         eps = np.finfo(np.float32).eps.item()
-        #gamma = 0.995
-        gamma = 0.95
+        gamma = 0.995
+        #gamma = 0.95
         R = 0.0
         policy_loss = torch.Tensor([0.0])
         value_loss = torch.Tensor([0.0])
@@ -512,7 +512,7 @@ class game_space:
                  evaluate_learner_every=10,
                  mutation_rate=0.0013, # auto-set if this is zero
                  evolve_by_block=True,
-                 integer_weights=0.8,
+                 integer_weights=1.0,
                  weight_range=1,
                  area_size=50,
                  area_toroid=True,
@@ -767,7 +767,7 @@ class game_space:
                 self.save_stats()
         if self.steps % 100 == 0:
             self.print_stats()
-        self.integer_weights = max(0, self.integer_weights*0.99)
+        self.integer_weights = max(0, self.integer_weights*0.995)
         self.steps += 1
 
 #################
@@ -2380,6 +2380,7 @@ class game_space:
         msg += "  learning: " + str(l_agents)
         msg += "  evolving: " + str(e_agents)
         msg += "  mutation rate: " + "%.5f"%self.mutation_rate
+        msg += "  integer weights: " + "%.5f"%self.integer_weights
         msg += "\n\n"
         #msg += self.print_new_state_stats()
         #msg += self.print_observations()
