@@ -75,14 +75,14 @@ reward = ((age-start_energy) ** 2)/(start_energy ** 2) + (age - start_energy)/st
 
 Some scenarios contain moving objects (predators, protectors, shooters, bullets). It was hypothesized that agents may train better with access to previous state information, allowing them to predict trajectories. Previous states were implemented as task blocks.
 
-`
+```
  each prev_state is supplied such that blocks are merged with another block
  state1 state2 state3   state4 state5 state6   state7  state8  state9
  block1 block2 block3   block7 block8 block9   block13 block14 block15
     block4  block5         block10 block11         block17  block18
         block6                 block12                  block19
         out_cat                out_cat                  out_cat
-`
+```
 
 # 6. Anneal integer weight usage
 
