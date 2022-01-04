@@ -1,4 +1,4 @@
-## Introduction
+# Introduction
 This repository contains code that implements an environment for simulated organisms to learn and evolve behaviours. The environment itself is a two-dimensional plane that can be configured as either toriodal or bounded. The environment presents a number of problems the agents must learn to solve.
 
 1. Agents have energy that depletes during each simulation step. They can replenish energy in a number of ways, such as by consuming things or staying close to protectors.
@@ -19,25 +19,25 @@ The purpose of this simulation is:
 - to discover methods that allow agents to quickly learn policies capable of solving multiple tasks
 - to discover methods that allow agents to quickly learn policies capable of solving complex tasks
 
-## Initial experiments
+# Initial experiments
 I started by running some experiments designed to train policies on simple tasks, using the smallest neural networks possible.
 
-# Experiment 1: evade predators
+## Experiment 1: evade predators
 This simulation contains only agents and predators. The agent's state includes readings of the number of predators above, below, to the left, and to the right of the agent, within the agent's maximum view distance (state size 4, action size 4, hidden size [8], parameters 72). Agents learn to run away from predators, and this policy can be learned quickly. Evolutionary processes find optimal policies much quicker than reinforcement learning mechanisms.
 
-# Experiment 2: collect food
+## Experiment 2: collect food
 This simulation contains only agents and food. Agents start with 200 energy and lose 1 energy per step. Colliding with food grants the agent 50 energy and causes the food to respawn in a new random location. Agents receive a reading of number of food above, below, to the left, and to the right of the agent, and their own energy value (state size 4, action size 4, hidden size [8], parameters 72).
 
-# Experiment 3: follow protectors
+## Experiment 3: follow protectors
 This simulation contains only agents and protectors. Agents do not lose energy over time, and are thus rewarded for achieving longer lifespans. Agents receive a reading of number of protectors above, below, to the left, and to the right of the agent (state size 4, action size 4, hidden size [8], parameters 72).
 
-# Experiment 4: evade predators and follow protectors
+## Experiment 4: evade predators and follow protectors
 This simulation contains both predators and protectors. Agents lose energy over time and are thus rewarded for regaining energy by staying close to protectors. Agents receive readings about nearby protectors and predators and a flag that indicates whether they are within the healing field of a protector (state size 9, action size 4, hidden size 16, parameters 224).
 
-## Findings
+# Findings
 When presented with a small state space and limited action space, agents quickly learned good policies for certain tasks, such as evading predators, staying close to protectors. However, certain tasks such a picking up food, and multi-problem tasks were not so easily learned. This is perhaps due to the nature of this environment - rewards are typically only received at the end of an episode, and as better policies are found, agents live longer and thus episodes take longer to run. In the case of the food picking problem, the observation space is sparse (agents only see non-zero inputs when close enough to a food item). For scenarios where agents require multiple inputs (e.g. sensors for predators, sensors for protectors, and sensors for food), the neural networks become quite large (in terms of number of parameters) and thus evolution is unlikely to find good policies quickly. A number of experiments were run in an attempt to improve training in these scenarios. Details follow.
 
-# 1. Split inputs for different tasks into "blocks"
+## 1. Split inputs for different tasks into "blocks"
 
 As mentioned, multi-problem tasks were difficult to learn due the the number of inputs. I experimented with breaking down tasks into small, easily learnable blocks. Instead of attaching all inputs to one hidden layer, inputs are split into blocks (e.g. sensor readings for predators are grouped into one block, sensor readings for food are grouped into another, and so on). Each block is attached to a small hidden layer and then an output layer of the size of the number of actions the agent can perform. Output layers from each task block are then concatenated and attached to a final output block.
 
@@ -51,17 +51,17 @@ Concatenate the three sets of four outputs into an input layer for the next step
 
 Connect the concatenated 12 values to a hidden layer of 8 and then a softmax layer of 4 values.
 
-# 2. Evolve by block instead of across the entire genome
+## 2. Evolve by block instead of across the entire genome
 
 Once tasks have been split into blocks, the weights that comprise an agent's genome can also be grouped - i.e., the weights for each task block, and weights for the action head, and the weights for the value head. Thus, in the above example, each agent genome would be represented by 5 blocks. When a reproduction step occurs, instead of performing crossover on the entire concatenated weights, it is applied on a block-by-block basis. Since each sub-block is small, evolutionary algorithms may more likely find good solutions.
 
-# 3. Use "integer" weights instead of uniform random weights
+## 3. Use "integer" weights instead of uniform random weights
 
 In my initial experiments, genomes were created using uniform random values. I experimented with initializing genomes using "integer" values (i.e. -1, 0, 1) to determine whether such values may allow evolutionary mechanisms to find solutions faster. Since the same genomes are used by the reinforcement learning process, zero values were replaced with small, non-zero values random.uniform(-0.1, 0.1).
 
 The "integer" genomes created using this process can be represented as strings by converting the int value of each weight into an alphabetic representation. Genomic diversity can be studied in this manner. During very early phases of training it was observed that the genomic sequences representing task blocks quickly converged on a small number (6-9) of unique sequences that remained unchanged for a long period (using genome store sizes of 20, 50, and 100). Eventually the diversity of these sequences would reduce. The genomic diversity of the output block increased quickly and remained high during training. Further studies of weight changes of agents using reinforcement learning showed that the weights in tasks blocks remained unchanged during backpropagation. I'm unsure as to why this happened.
 
-# 4. Improve final reward calculation to encourage longer episodes and action diversity
+## 4. Improve final reward calculation to encourage longer episodes and action diversity
 
 Initial experiments rewarded agents based on their age as follows:
 
@@ -75,7 +75,7 @@ A number of different reward schemes were examined. For instance, one reward sch
 reward = ((age-start_energy) ** 2)/(start_energy ** 2) + (age - start_energy)/start_energy + action_entropy - 1.5
 ```
 
-# 5. Add handling of previous states
+## 5. Add handling of previous states
 
 Some scenarios contain moving objects (predators, protectors, shooters, bullets). It was hypothesized that agents may train better with access to previous state information, allowing them to predict trajectories. Previous states were implemented as task blocks.
 
@@ -88,26 +88,26 @@ Some scenarios contain moving objects (predators, protectors, shooters, bullets)
         out_cat                out_cat                  out_cat
 ```
 
-# 6. Anneal integer weight usage
+## 6. Anneal integer weight usage
 
 While integer weights might help evolutionary strategies find intermediate solutions quickly, they're probably not all that great for learning agents. As such, a balance between the use of integer weights and uniform random floats might be the solution to aid both strategies. Since evolutionary strategies find a unique set of task blocks very quickly, I anneal the use of integer weights to zero at the beginning of training. It is unclear whether this helps speed the training process.
 
-# 7. Varying of activation functions, optimizers, learning rate, etc.
+## 7. Varying of activation functions, optimizers, learning rate, etc.
 
 During experimentation, I tried many different activation functions, neural network architectures, optimizers, learning rates, mutation rates, etc. Values outside of the "default" didn't have a marked effect on the speed at which training occurred.
 
-# 8. Selective block reproduction
+## 8. Selective block reproduction
 
 Since genome store contains genomes created from both evolving and learning agents, and task blocks are mostly fixed early in training, it might be better to not perform crossover on all blocks during evolution. An implementation that sets a lower than 100% chance that a block will perform crossover, and instead simply inherit the genome from one of its parents, exists in the code. It is unclear as to whether this helps speed up the training process.
 
-## Concerns
+# Concerns
 
 Statistics from the last 100 active agents were graphed during all experiments. Although values in genome store always rose during training, the last 100 active agents never improved. For evolving agents, this is understandable - many crossovers and mutations will create neural networks that perform poorly. However, active learning agents should be expected to improve over time, and this did not happen.
 
 Even after long periods of training (many hours or even overnight), when the simulation is run in inference mode, most of the policies captured in the genome store simply didn't perform well.
 
 
-## Technical details
+# Technical details
 The whole simulation is implemented in **alien_ecology.py**. If you want to try running this yourself, you will likely need to install some python packages, including numpy, ursina, and torch (pyTorch). To run the simulation, just type:
 
 python alien_ecology.py
