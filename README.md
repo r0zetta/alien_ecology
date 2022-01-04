@@ -65,11 +65,15 @@ The "integer" genomes created using this process can be represented as strings b
 
 Initial experiments rewarded agents based on their age as follows:
 
+```
 reward = (age - start_energy)/start_energy
+```
 
 A number of different reward schemes were examined. For instance, one reward scheme used the mean age of items in the genome store instead of starting energy in the above equation. However, it failed to improve training. The current reward scheme attempts to factor in action entropy (rewarding agents that perform a distribution of actions) and presents a much larger reward for agents achieving higher longevity:
 
+```
 reward = ((age-start_energy) ** 2)/(start_energy ** 2) + (age - start_energy)/start_energy + action_entropy - 1.5
+```
 
 # 5. Add handling of previous states
 
@@ -86,35 +90,59 @@ Some scenarios contain moving objects (predators, protectors, shooters, bullets)
 
 # 6. Anneal integer weight usage
 
+While integer weights might help evolutionary strategies find intermediate solutions quickly, they're probably not all that great for learning agents. As such, a balance between the use of integer weights and uniform random floats might be the solution to aid both strategies. Since evolutionary strategies find a unique set of task blocks very quickly, I anneal the use of integer weights to zero at the beginning of training. It is unclear whether this helps speed the training process.
+
 # 7. Varying of activation functions, optimizers, learning rate, etc.
 
+During experimentation, I tried many different activation functions, neural network architectures, optimizers, learning rates, mutation rates, etc. Values outside of the "default" didn't have a marked effect on the speed at which training occurred.
+
+# 8. Selective block reproduction
+
+Since genome store contains genomes created from both evolving and learning agents, and task blocks are mostly fixed early in training, it might be better to not perform crossover on all blocks during evolution. An implementation that sets a lower than 100% chance that a block will perform crossover, and instead simply inherit the genome from one of its parents, exists in the code. It is unclear as to whether this helps speed up the training process.
+
+## Concerns
+
+Statistics from the last 100 active agents were graphed during all experiments. Although values in genome store always rose during training, the last 100 active agents never improved. For evolving agents, this is understandable - many crossovers and mutations will create neural networks that perform poorly. However, active learning agents should be expected to improve over time, and this did not happen.
+
+Even after long periods of training (many hours or even overnight), when the simulation is run in inference mode, most of the policies captured in the genome store simply didn't perform well.
 
 
-
-
-# Technical details
+## Technical details
 The whole simulation is implemented in **alien_ecology.py**. If you want to try running this yourself, you will likely need to install some python packages, including numpy, ursina, and torch (pyTorch). To run the simulation, just type:
 
 python alien_ecology.py
 
-at the command line. To see visual output, append **-v** to the above command line. Visual output will allow you to watch agents learn.
+at the command line. 
+
+To see visual output, append **-v** to the above command line. Visual output will allow you to watch agents learn.
+
+To observe inference, append **-i** to the above command line. Inference will run the simulation without learners, without training, and only sample new agents from the saved genome store. Use this option to visualize trained agents.
 
 You can view stats from the experiment by running the accompanying plot_stats.ipynb notebook.
 
 All other options will require editing the file itself, since I didn't bother parameterizing them. Look for class game_space and edit the inputs to the init function. Here are a few tips:
 
 - **learners** defines the split between learning agents and evolving agents. At 1.0, the simulation is all learners. At 0.0, the simulation is all evolvers.
+- **num_prev_states** how many previous states are presented as input for agents.
+- **evolve_by_block** if set to zero, crossover will happen across the entire genome. If set to a value between 0 and 1, will determine the chance that crossover will happen blockwise. For instance, at a value of 0.2, there will be a one in five chance that crossover will happen on a block during reproduction.
 - **area_size** defines the width and height of the simulated area. It is always a square shape.
 - **area_toroid** if True, agents will appear on the opposite side if they move past the area's boundaries. If false, they will no longer move if hitting the boundary. Note that bounded simulations will add observations (boundary up, down, left, right)
 - **num_agents** defines the number of agents to run in the simulation. This number will be split between learners and evolvers.
 - **agent_start_energy** defines agent starting energy.
 - **agent_energy_drain** defines how many energy agents lose per step.
+- **agent_obs_directions** (set to 4 or 8) defines whether agents sense in 4 or 8 directions,
+- **agent_view_distance** how far agents can see,
 - **num_predators** defines the number of predators in the simulation. If you want to have fun, increase the speed and inertial_damping values in class Predator.
 - **num_protectors** defines the number of protectors in the simulation.
+- **protector_safe_distance** size of protector aura
 - **num_shooterss** defines the number of shooters in the simulation.
+- **shoot_cooldown** how many steps before a shooter can fire a bullet, after firing.
+- **bullet_life** how many steps a bullet exists for.
+- **bullet_radius** size of bullets.
 - **num_food** defines the number of food present in the simulation. Setting this to zero removes food completely, so remember to adjust agent observations accordingly.
 - **use_zones** defines whether zones will be used during the simulation. Zones can be defined in the **self.zone_config** variable in game_space. See the code for an example of how to do this.
 - **fitness_index** if set to 1 will evaluate new genomes based on fitness, and if set to 2 will base on age
+- **genome_store_size** maximum items the genome store can hold.
 - **integer_weights** and **weight_range** are parameters to set the randomly generated weights for new genomes. A default setting of **weight_range=1** with **integer_weights=False** will generate float weights between -1.0 and 1.0. Setting **integer_weights=True** will generate genomes containing values of -1.0, 0.0. and 1.0. Setting **weight_range** to a higher value of n (e.g. 2) will cause weights between -n and n to be generated.
 
 Note that you can also change the simulation by commenting out items in self.actions and/or self.observations.
