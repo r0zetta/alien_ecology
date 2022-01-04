@@ -34,7 +34,7 @@ This simulation contains only agents and protectors. Agents do not lose energy o
 ## Experiment 4: evade predators and follow protectors
 This simulation contains both predators and protectors. Agents lose energy over time and are thus rewarded for regaining energy by staying close to protectors. Agents receive readings about nearby protectors and predators and a flag that indicates whether they are within the healing field of a protector (state size 9, action size 4, hidden size 16, parameters 224).
 
-# Findings
+# Findings and further experimentation
 When presented with a small state space and limited action space, agents quickly learned good policies for certain tasks, such as evading predators, staying close to protectors. However, certain tasks such a picking up food, and multi-problem tasks were not so easily learned. This is perhaps due to the nature of this environment - rewards are typically only received at the end of an episode, and as better policies are found, agents live longer and thus episodes take longer to run. In the case of the food picking problem, the observation space is sparse (agents only see non-zero inputs when close enough to a food item). For scenarios where agents require multiple inputs (e.g. sensors for predators, sensors for protectors, and sensors for food), the neural networks become quite large (in terms of number of parameters) and thus evolution is unlikely to find good policies quickly. A number of experiments were run in an attempt to improve training in these scenarios. Details follow.
 
 ## 1. Split inputs for different tasks into "blocks"
@@ -104,7 +104,7 @@ Since genome store contains genomes created from both evolving and learning agen
 
 Statistics from the last 100 active agents were graphed during all experiments. Although values in genome store always rose during training, the last 100 active agents never improved. For evolving agents, this is understandable - many crossovers and mutations will create neural networks that perform poorly. However, active learning agents should be expected to improve over time, and this did not happen.
 
-Even after long periods of training (many hours or even overnight), when the simulation is run in inference mode, most of the policies captured in the genome store simply didn't perform well.
+Even after long periods of training (many hours or even overnight), when the simulation was run in inference mode, most of the policies captured in the genome store simply didn't perform well.
 
 
 # Technical details
