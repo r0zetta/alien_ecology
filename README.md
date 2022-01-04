@@ -59,13 +59,34 @@ Once tasks have been split into blocks, the weights that comprise an agent's gen
 
 In my initial experiments, genomes were created using uniform random values. I experimented with initializing genomes using "integer" values (i.e. -1, 0, 1) to determine whether such values may allow evolutionary mechanisms to find solutions faster. Since the same genomes are used by the reinforcement learning process, zero values were replaced with small, non-zero values random.uniform(-0.1, 0.1).
 
-The "integer" genomes created using this process can be represented as strings by converting the int value of each weight into an alphabetic representation. Genomic diversity can be studied in this manner. 
+The "integer" genomes created using this process can be represented as strings by converting the int value of each weight into an alphabetic representation. Genomic diversity can be studied in this manner. During very early phases of training it was observed that the genomic sequences representing task blocks quickly converged on a small number (6-9) of unique sequences that remained unchanged for a long period (using genome store sizes of 20, 50, and 100). Eventually the diversity of these sequences would reduce. The genomic diversity of the output block increased quickly and remained high during training. Further studies of weight changes of agents using reinforcement learning showed that the weights in tasks blocks remained unchanged during backpropagation. I'm unsure as to why this happened.
 
-# 4. Improve final reward calculation to encourage longer episodes
+# 4. Improve final reward calculation to encourage longer episodes and action diversity
+
+Initial experiments rewarded agents based on their age as follows:
+
+reward = (age - start_energy)/start_energy
+
+A number of different reward schemes were examined. For instance, one reward scheme used the mean age of items in the genome store instead of starting energy in the above equation. However, it failed to improve training. The current reward scheme attempts to factor in action entropy (rewarding agents that perform a distribution of actions) and presents a much larger reward for agents achieving higher longevity:
+
+reward = ((age-start_energy) ** 2)/(start_energy ** 2) + (age - start_energy)/start_energy + action_entropy - 1.5
 
 # 5. Add handling of previous states
 
+Some scenarios contain moving objects (predators, protectors, shooters, bullets). It was hypothesized that agents may train better with access to previous state information, allowing them to predict trajectories. Previous states were implemented as task blocks.
 
+`
+ each prev_state is supplied such that blocks are merged with another block
+ state1 state2 state3   state4 state5 state6   state7  state8  state9
+ block1 block2 block3   block7 block8 block9   block13 block14 block15
+    block4  block5         block10 block11         block17  block18
+        block6                 block12                  block19
+        out_cat                out_cat                  out_cat
+`
+
+# 6. Anneal integer weight usage
+
+# 7. Varying of activation functions, optimizers, learning rate, etc.
 
 
 
