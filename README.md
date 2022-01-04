@@ -35,7 +35,7 @@ This simulation contains only agents and protectors. Agents do not lose energy o
 This simulation contains both predators and protectors. Agents lose energy over time and are thus rewarded for regaining energy by staying close to protectors. Agents receive readings about nearby protectors and predators and a flag that indicates whether they are within the healing field of a protector (state size 9, action size 4, hidden size 16, parameters 224).
 
 ## Findings
-When presented with a small state space and limited action space, agents quickly learned good policies for certain tasks, such as evading predators, staying close to protectors. However, certain tasks such a picking up food, and multi-problem tasks were not so easily learned. This is perhaps due to the nature of this environment - rewards are typically only received at the end of an episode, and as better policies are found, agents live longer and thus episodes take longer to run. For scenarios where the agents require multiple inputs (e.g. sensors for predators, sensors for protectors, sensors for food), the neural networks become quite large (in terms of number of parameters) and thus evolution is unlikely to find good policies quickly. A number of experiments were run in an attempt to improve training in these scenarios. Details follow.
+When presented with a small state space and limited action space, agents quickly learned good policies for certain tasks, such as evading predators, staying close to protectors. However, certain tasks such a picking up food, and multi-problem tasks were not so easily learned. This is perhaps due to the nature of this environment - rewards are typically only received at the end of an episode, and as better policies are found, agents live longer and thus episodes take longer to run. In the case of the food picking problem, the observation space is sparse (agents only see non-zero inputs when close enough to a food item). For scenarios where agents require multiple inputs (e.g. sensors for predators, sensors for protectors, and sensors for food), the neural networks become quite large (in terms of number of parameters) and thus evolution is unlikely to find good policies quickly. A number of experiments were run in an attempt to improve training in these scenarios. Details follow.
 
 # 1. Split inputs for different tasks into "blocks"
 
@@ -84,17 +84,16 @@ All other options will require editing the file itself, since I didn't bother pa
 
 - **learners** defines the split between learning agents and evolving agents. At 1.0, the simulation is all learners. At 0.0, the simulation is all evolvers.
 - **area_size** defines the width and height of the simulated area. It is always a square shape.
+- **area_toroid** if True, agents will appear on the opposite side if they move past the area's boundaries. If false, they will no longer move if hitting the boundary. Note that bounded simulations will add observations (boundary up, down, left, right)
 - **num_agents** defines the number of agents to run in the simulation. This number will be split between learners and evolvers.
 - **agent_start_energy** defines agent starting energy.
 - **agent_energy_drain** defines how many energy agents lose per step.
 - **num_predators** defines the number of predators in the simulation. If you want to have fun, increase the speed and inertial_damping values in class Predator.
 - **num_protectors** defines the number of protectors in the simulation.
+- **num_shooterss** defines the number of shooters in the simulation.
 - **num_food** defines the number of food present in the simulation. Setting this to zero removes food completely, so remember to adjust agent observations accordingly.
 - **use_zones** defines whether zones will be used during the simulation. Zones can be defined in the **self.zone_config** variable in game_space. See the code for an example of how to do this.
 - **fitness_index** if set to 1 will evaluate new genomes based on fitness, and if set to 2 will base on age
-- **respawn_genome_store** - when evolving agents are respawned, how likely are their new genomes to come from genome_store instead of previous_agents
-- **rebirth_genome_store** - same as above but for learning agents
-- **top_n** defines the portion of genomes to select from either previous_agents or genome_store when reproducing or spawning new agents
 - **integer_weights** and **weight_range** are parameters to set the randomly generated weights for new genomes. A default setting of **weight_range=1** with **integer_weights=False** will generate float weights between -1.0 and 1.0. Setting **integer_weights=True** will generate genomes containing values of -1.0, 0.0. and 1.0. Setting **weight_range** to a higher value of n (e.g. 2) will cause weights between -n and n to be generated.
 
 Note that you can also change the simulation by commenting out items in self.actions and/or self.observations.
