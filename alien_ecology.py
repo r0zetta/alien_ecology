@@ -87,9 +87,9 @@ class Net(nn.Module):
                 if di == 0:
                     for oi, oblock in dblock.items():
                         inp = x1[oi*binps:(oi*binps)+binps]
-                        out = F.tanh(self.neurons[neuron_index](inp))
+                        out = F.relu(self.neurons[neuron_index](inp))
                         neuron_index += 1
-                        out = F.tanh(self.neurons[neuron_index](out))
+                        out = F.relu(self.neurons[neuron_index](out))
                         last_out = out
                         prev_outs.append(out)
                         neuron_index += 1
@@ -97,16 +97,16 @@ class Net(nn.Module):
                     for oi, oblock in dblock.items():
                         inp = torch.cat((prev_outs[out_index], prev_outs[out_index+1]))
                         out_index += 1
-                        out = F.tanh(self.neurons[neuron_index](inp))
+                        out = F.relu(self.neurons[neuron_index](inp))
                         neuron_index += 1
-                        out = F.tanh(self.neurons[neuron_index](out))
+                        out = F.relu(self.neurons[neuron_index](out))
                         last_out = out
                         prev_outs.append(out)
                         neuron_index += 1
             block_out[bi] = last_out
             input_index += self.block_inputs[bi]*self.prev_states
         rc = torch.ravel(torch.tensor(block_out))
-        rc = F.tanh(self.cat_hidden(rc))
+        rc = F.relu(self.cat_hidden(rc))
         a = F.softmax(F.relu(self.action(rc)), dim=-1)
         v = F.relu(self.value(rc))
         return a, v
@@ -202,17 +202,20 @@ class Net(nn.Module):
         self.value.weight.data = self.weights[-1][0][2]
 
     def get_action(self, state):
-        probs, value = self.forward(state)
         if self.l == True:
+            probs, value = self.forward(state)
             m = Categorical(probs)
             action = m.sample()
+            ret = torch.argmax(probs)
             prob = m.log_prob(action)
             return action, value, prob
         else:
-            m = Categorical(probs)
-            action = m.sample()
-            #action = np.argmax(probs.detach().numpy())
-            return action
+            with torch.no_grad():
+                probs, value = self.forward(state)
+                m = Categorical(probs)
+                action = m.sample()
+                ret = torch.argmax(probs)
+                return action
 
 class GN_model:
     def __init__(self, w, l=False):
@@ -220,8 +223,8 @@ class GN_model:
         self.w = w
         self.policy = Net(w, l)
         if self.l == True:
-            self.optimizer = optim.AdamW(self.policy.parameters())
-            #self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4)
+            #self.optimizer = optim.AdamW(self.policy.parameters(), lr=3e-4)
+            self.optimizer = optim.Adam(self.policy.parameters(), lr=3e-4)
             #self.optimizer = optim.SGD(self.policy.parameters(), lr=0.1, momentum=0.9)
             self.reset()
 
@@ -333,7 +336,7 @@ class Agent:
         self.xpos = x
         self.ypos = y
         self.zpos = z
-        self.inertial_damping = 0.0
+        self.inertial_damping = 0.3
         self.speed = 0.5
         self.color = color
         self.color_str = self.colors[color]
@@ -504,28 +507,29 @@ class Zone:
 
 class game_space:
     def __init__(self,
-                 block_hidden_factor=1,
-                 out_cat_hidden_factor=4,
+                 block_hidden_factor=2,
+                 out_cat_hidden_factor=2,
                  num_prev_states=2,
                  num_recent_actions=1000,
                  learners=0.50,
                  evaluate_learner_every=10,
                  mutation_rate=0.0013, # auto-set if this is zero
-                 evolve_by_block=True,
+                 evolve_by_block=0.2,
                  integer_weights=1.0,
                  weight_range=1,
                  area_size=50,
-                 area_toroid=True,
+                 area_toroid=False,
                  num_agents=10,
                  agent_start_energy=100,
                  agent_energy_drain=1,
                  agent_view_distance=15,
+                 agent_obs_directions=8,
                  num_protectors=3,
                  protector_safe_distance=7,
-                 num_predators=6,
-                 predator_view_distance=8,
-                 predator_kill_distance=2,
-                 num_shooters=0,
+                 num_predators=0,
+                 predator_view_distance=10,
+                 predator_kill_distance=1.5,
+                 num_shooters=5,
                  shooter_visible_range=20,
                  shoot_cooldown=8,
                  bullet_life=100,
@@ -537,7 +541,7 @@ class game_space:
                  inference=False,
                  pulse_zones=False,
                  num_previous_agents=100,
-                 genome_store_size=100,
+                 genome_store_size=50,
                  fitness_index=2, # 1: fitness, 2: age
                  save_every=5000,
                  record_every=200,
@@ -579,6 +583,7 @@ class game_space:
         self.num_agents = num_agents
         self.agent_start_energy = agent_start_energy
         self.agent_energy_drain = agent_energy_drain
+        self.agent_obs_directions = agent_obs_directions
         self.num_protectors = num_protectors
         self.protector_safe_distance = protector_safe_distance
         self.num_predators = num_predators
@@ -616,8 +621,12 @@ class game_space:
                                'down',
                                'downleft',
                                'left',
-                               'upleft',
-                               ]
+                               'upleft']
+        if self.agent_obs_directions == 4:
+            self.obs_directions = ['up',
+                                   'right',
+                                   'down',
+                                   'left']
         self.actions = [
                         #"rotate_right",
                         #"rotate_left",
@@ -1308,21 +1317,21 @@ class game_space:
                 if len(nearby_shooters) > 0:
                     fi = random.choice(nearby_shooters)
                     self.respawn_shooter(fi)
-                    self.things['agents'][index].energy += self.agent_start_energy
-                    self.things['agents'][index].happiness += self.agent_start_energy
+                    self.things['agents'][index].energy += self.agent_start_energy * 2
+                    self.things['agents'][index].happiness += self.agent_start_energy * 2
                     # Reward learning agents for eating shooter
                     if len(self.things['agents'][index].model.rewards) > 0:
-                        self.things['agents'][index].model.rewards[-1] = np.float32(1.0)
+                        self.things['agents'][index].model.rewards[-1] = np.float32(5.0)
             if self.num_food > 0:
                 nearby_food = self.get_food_in_radius(xpos, ypos, 1)
                 if len(nearby_food) > 0:
                     fi = random.choice(nearby_food)
                     self.respawn_food(fi)
-                    self.things['agents'][index].energy += 50
-                    self.things['agents'][index].happiness += 50
+                    self.things['agents'][index].energy += self.agent_start_energy * 0.5
+                    self.things['agents'][index].happiness += self.agent_start_energy * 0.5
                     # Reward learning agents for eating food
                     if len(self.things['agents'][index].model.rewards) > 0:
-                        self.things['agents'][index].model.rewards[-1] = np.float32(1.0)
+                        self.things['agents'][index].model.rewards[-1] = np.float32(2.0)
             energy_drain = self.agent_energy_drain
             protectors = self.get_protectors_in_radius(xpos, ypos, self.protector_safe_distance)
             if len(protectors) > 0:
@@ -2038,7 +2047,7 @@ class game_space:
         return genome_pool
 
     def reproduce_genome(self, genome1, genome2):
-        if self.evolve_by_block == True:
+        if self.evolve_by_block > 0:
             return self.reproduce_genome_block(genome1, genome2)
         else:
             return self.reproduce_genome_full(genome1, genome2)
@@ -2072,17 +2081,23 @@ class game_space:
         for index in range(len(genome1)):
             g1 = genome1[index]
             g2 = genome2[index]
-            entry = []
-            split = random.randint(1, len(g1))
-            if random.random() < 0.5:
-                entry = np.concatenate((g1[:split], g2[split:]))
+            if random.random() < self.evolve_by_block:
+                entry = []
+                split = random.randint(1, len(g1))
+                if random.random() < 0.5:
+                    entry = np.concatenate((g1[:split], g2[split:]))
+                else:
+                    entry = np.concatenate((g2[:split], g1[split:]))
+                new_genome.append(entry)
             else:
-                entry = np.concatenate((g2[:split], g1[split:]))
-            new_genome.append(entry)
+                if random.random() < 0.5:
+                    new_genome.append(g1)
+                else:
+                    new_genome.append(g2)
         return new_genome
 
     def mutate_genome(self, genome):
-        if self.evolve_by_block == True:
+        if self.evolve_by_block > 0:
             return self.mutate_genome_block(genome)
         else:
             return self.mutate_genome_full(genome)
